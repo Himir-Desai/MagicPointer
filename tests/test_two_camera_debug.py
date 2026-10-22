@@ -71,7 +71,7 @@ def dual_session(calibration='valid', *, marker_ok=True, skew=.005, disagree=Fal
             geometry['camera_indices'] = [1, 0]
             path.write_text(json.dumps(geometry))
         args = parser().parse_args(['run', *([] if desktop_control else ['--debug']), '--left', '0', '--right', '1',
-                                   '--calibration', str(path), '--output', directory, '--mute', *capture_args])
+                                   '--hand-backend', 'mediapipe', '--calibrated', '--calibration', str(path), '--output', directory, '--mute', *capture_args])
         args.uncalibrated = force_uncalibrated
         with patch.object(app, 'Cameras', return_value=camera) as open_cameras, patch.object(app, 'Tracker', side_effect=trackers), \
                 patch.object(app, 'Chimes', return_value=audio), patch.object(app.time, 'monotonic', side_effect=tick), \
@@ -211,7 +211,7 @@ class TwoCameraDebugTests(unittest.TestCase):
 
     def test_normal_control_still_rejects_missing_calibration(self):
         with tempfile.TemporaryDirectory() as directory:
-            args = parser().parse_args(['run', '--right', '1', '--calibration', str(Path(directory)/'missing.json')])
+            args = parser().parse_args(['run', '--calibrated', '--right', '1', '--calibration', str(Path(directory)/'missing.json')])
             with patch.object(app, 'Cameras') as cameras, patch('magicpointer.desktop.Desktop') as desktop:
                 with self.assertRaisesRegex(ValueError, 'Cannot load calibration'):
                     app.run(args)
@@ -267,17 +267,17 @@ class TwoCameraDebugTests(unittest.TestCase):
         metadata, rows, _, _, _, _, markers = dual_session(force_uncalibrated=True)
         self.assertFalse(metadata['stereo'])
         self.assertEqual(metadata['coordinate_units'], 'activation_palm_sizes')
-        self.assertIn('explicitly', metadata['calibration_issue'])
+        self.assertIn('Calibration-free', metadata['calibration_issue'])
         self.assertTrue(any(event['kind'] == 'activate' for row in rows for event in row['events']))
         markers.assert_not_called()
 
-    def test_uncalibrated_flag_cannot_enable_real_desktop_input(self):
-        args = parser().parse_args(['run', '--right', '1', '--uncalibrated'])
-        with patch.object(app.Stereo, 'load') as load, patch('magicpointer.desktop.Desktop') as desktop:
-            with self.assertRaisesRegex(ValueError, '--debug'):
-                app.run(args)
-            load.assert_not_called()
-            desktop.assert_not_called()
+    def test_uncalibrated_desktop_skips_calibration_and_markers(self):
+        with patch.object(Stereo, 'load') as load:
+            metadata, _, _, _, _, _, markers = dual_session(
+                force_uncalibrated=True, desktop_control=True)
+        load.assert_not_called()
+        markers.assert_not_called()
+        self.assertTrue(any(call[0] == 'move' for call in metadata['desktop_commands']))
 
 
     def test_rejected_pair_cannot_release_owner_even_with_both_palm_estimates(self):

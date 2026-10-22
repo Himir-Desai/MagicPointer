@@ -131,16 +131,12 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
 
 def run(args):
     wilor = args.hand_backend == 'wilor'
-    if wilor and not args.debug:
-        raise ValueError('WiLoR is a debug-only experiment; add --debug. Desktop control still uses MediaPipe.')
-    if args.uncalibrated and not args.debug:
-        raise ValueError("Uncalibrated testing requires --debug; desktop control requires stereo calibration")
-    if not args.debug and args.right is None:
-        raise ValueError("Real pointer control needs two cameras. For one-camera preview use run --debug")
     two_cameras = args.right is not None
+    if not args.uncalibrated and not two_cameras:
+        raise ValueError("Calibrated stereo requires two cameras; omit --calibrated for one-camera control")
     stereo, calibration_issue = None, None
     if args.uncalibrated:
-        calibration_issue = 'Uncalibrated testing requested explicitly'
+        calibration_issue = 'Calibration-free image-space control selected'
     if two_cameras and not args.uncalibrated:
         try:
             stereo = Stereo.load(args.calibration)
@@ -192,8 +188,9 @@ def run(args):
         if wilor:
             from .wilor_debug import WiLoRDebug
             wilor_tracker = WiLoRDebug(args, 2 if two_cameras else 1)
-            log.metadata['hand_model'] = wilor_tracker.info
-            print('WiLoR debug settings:', wilor_tracker.info)
+            if log:
+                log.metadata['hand_model'] = wilor_tracker.info
+            print('WiLoR settings:', wilor_tracker.info)
         else:
             trackers.append(Tracker(args.model, num_hands=args.max_hands))
             if two_cameras:
@@ -216,10 +213,10 @@ def run(args):
             if log:
                 log.metadata.update(cameras=cameras.info, workspace_width=engine.width, workspace_height=engine.height)
             if preview_only:
-                print("UNCALIBRATED TEST: shared gestures and approximate virtual pointer; no metric depth.")
+                print("CALIBRATION-FREE: shared gestures and approximate image-space pointer; no metric depth.")
                 print("Calibration:", calibration_issue)
             print("Camera negotiated settings:", cameras.info)
-            print("DEBUG: preview only; no OS pointer input" if args.debug else "STEREO CONTROL: Q/Escape or close window to stop")
+            print("DEBUG: preview only; no OS pointer input" if args.debug else "DESKTOP CONTROL: Q/Escape or close window to stop")
             print("Show one fist for 2.5 seconds to select that hand; open its palm to release. Other hands are ignored.")
             print("Two fingers toward screen: hold steady to set scroll neutral; tilt up/down. Index-only exits scrolling.")
             start, count, measured_fps = time.monotonic(), 0, 0.
@@ -356,7 +353,7 @@ def run(args):
                 else:
                     panel = np.full((540, 960, 3), (25, 25, 25), dtype=np.uint8)
                 # Primary-camera raw view is intentionally labelled: controls mirror X by default.
-                title = "DEBUG / NO DESKTOP INPUT" if args.debug else "STEREO / DESKTOP CONTROL"
+                title = "DEBUG / NO DESKTOP INPUT" if args.debug else ("CALIBRATED STEREO / DESKTOP CONTROL" if stereo else "CALIBRATION-FREE / DESKTOP CONTROL")
                 if args.debug and two_cameras:
                     title = "TWO-CAMERA DEBUG / NO OS INPUT / " + ("UNCALIBRATED TEST" if preview_only else "CALIBRATED STEREO")
                 lines = [title,
@@ -366,7 +363,7 @@ def run(args):
                          f"Processing: {measured_fps:.1f} FPS | Q / Esc / close window to stop"]
                 if wilor_tracker:
                     info = wilor_tracker.info
-                    lines.append(f"WILOR DEBUG | {info['device']} / {info['precision']} | threshold {args.wilor_confidence:.2f} | validated fresh hands")
+                    lines.append(f"WILOR | {info['device']} / {info['precision']} | threshold {args.wilor_confidence:.2f} | validated fresh hands")
                 if engine.scrolling:
                     scroll = engine.scroll
                     feedback = "Hold two fingers steady: setting scroll neutral"

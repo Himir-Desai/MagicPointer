@@ -1,7 +1,7 @@
 # MagicPointer
 
-Windows-first stereo hand pointer, with an optional macOS input adapter and a
-one-/two-camera debug preview. The implementation is an initial prototype: real
+Windows-first WiLoR hand pointer with calibration-free desktop control, an optional
+macOS input adapter and a one-/two-camera debug preview. The implementation is an initial prototype: real
 Windows input, camera-rig accuracy, gesture recognition on real hands, and the
 12-foot target require hardware validation. See [VALIDATION.md](VALIDATION.md).
 
@@ -14,13 +14,14 @@ Use 64-bit Python **3.11** on Windows 10/11. The package supports Python 3.9–3
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e .
-python -m magicpointer download-model
 python -m magicpointer cameras --fps auto
 ```
 
 If PowerShell activation is restricted, run `.venv\Scripts\python.exe` directly
-instead of `python`. Model download requires internet access once; normal camera
-processing is local. The versioned official MediaPipe model is checksum-verified.
+instead of `python`. Install the separate [WiLoR environment and weights](docs/model-comparison.md)
+before running the default app. Existing WiLoR experiment installations need no new
+dependencies or weights. Processing is local after setup. MediaPipe is optional:
+use `download-model` and `--hand-backend mediapipe` for that backend.
 
 On macOS, use a compatible Python installation:
 
@@ -58,21 +59,30 @@ input. WiLoR has a separate CUDA environment for the RTX 4060. No filters or
 adaptive sensitivity retries are used. RTMPose offers 2D joints; MediaPipe/WiLoR
 also exercise the shared 3D geometry classifier.
 
-## Try optimized WiLoR in regular debug
+## Run the desktop app without calibration
 
-After the [WiLoR setup](docs/model-comparison.md), the opt-in regular debug backend
-supports the normal virtual pointer/click/scroll flow:
+After the [WiLoR setup](docs/model-comparison.md), launch real desktop control
+with your camera indices (1 and 2 in the tested setup):
 
 ```powershell
-.\.venv\Scripts\python.exe -m magicpointer run --debug --uncalibrated --hand-backend wilor --left 1 --right 2 --fps 30 --max-hands 2
+.\.venv\Scripts\python.exe -m magicpointer run --left 1 --right 2
 ```
 
 It uses CUDA FP16 by default on a CUDA device, batches both views, validates fresh
 detections at confidence **0.50**, preserves the selected hand, and applies fixed
 palm-relative thumb geometry. Append `--wilor-confidence 0.45` for the lower
 threshold or `--wilor-precision fp32` for a precision reference. See the
-[WiLoR debug trial guide](docs/wilor-debug.md) for timings, confirmation latency
-and limitations. WiLoR is restricted to `--debug`; MediaPipe remains the default.
+[WiLoR guide](docs/wilor-debug.md) for timings, confirmation latency and limitations.
+WiLoR, 30 FPS capture, two hand candidates per view and calibration-free image-space
+control are now the defaults. No checkerboard, wall markers or calibration file is
+needed, even if an old calibration.json exists. Hold one fist for 2.5 seconds to
+activate; open its palm to release. Q/Escape or closing the window exits.
+
+This command moves/clicks/scrolls the real desktop. Add `--debug` to preview the
+same configuration with a virtual pointer and data-only diagnostics. Normal runs
+do not record diagnostics. Omit `--right` for one-camera use; one selected view
+can also continue when the other view loses the hand. Uncalibrated movement is
+normalized by the activation palm size, with no measured depth or distance limit.
 
 ## Try one camera first
 
@@ -144,8 +154,8 @@ timing and, when available, calibrated wrist range and a virtual pointer. Debug
 mode sends no OS pointer, click or scroll input. Data-only recording automatically
 includes both cameras in the same diagnostic ZIP; no images/video/audio are saved.
 
-Before calibration, or if calibration cannot be loaded or does not match the
-selected indices/resolution, it starts in **UNCALIBRATED TEST**. Both views now
+By default it starts in **UNCALIBRATED TEST**, ignoring saved calibration. With
+`--calibrated --debug`, unavailable or mismatched calibration falls back to this mode. Both views now
 contribute to one shared gesture decision and hand selection, and approximate
 virtual pointing/clicking/scrolling can be tested without printouts. Pointer
 position uses the primary view normalized by palm size; it has no metric depth.
@@ -156,8 +166,8 @@ mode even when a calibration file exists, use:
 python -m magicpointer run --debug --uncalibrated --left 0 --right 1 --fps 30
 ```
 
-`--uncalibrated` is allowed only with `--debug`. After completing
-calibration, restart without `--uncalibrated`: **CALIBRATED STEREO** checks wall markers
+`--uncalibrated` is the default for both debug and desktop control. After completing
+calibration, add `--calibrated`: **CALIBRATED STEREO** checks wall markers
 before enabling the usual fist/point/click/scroll virtual-pointer simulation.
 Pair timing, hand association, depth validity and tracking-loss checks still apply.
 
@@ -211,7 +221,7 @@ geometry or camera assignment. The default request remains 1920x1080; higher-res
 Windows operation still needs live testing. macOS retains its system backend.
 Existing commands with `--camera-backend msmf` remain valid on Windows.
 
-## Prepare and calibrate the fixed stereo rig
+## Optional: prepare and calibrate the fixed stereo rig
 
 Place both 1080p cameras near the TV with overlapping views and a rigid mount.
 Use separate camera indices. Do not move either camera, change its lens/zoom, or
@@ -258,18 +268,18 @@ units. Permanent markers verify the fixed setup at each startup; two marker
 centers alone do not replace camera calibration. Camera-to-wall distances are
 inferred from calibrated stereo geometry rather than required as extra inputs.
 
-## Run stereo control
+## Optional: run calibrated stereo control
 
 Preview the complete stereo path before using desktop input:
 
 ```sh
-python -m magicpointer run --debug --left 0 --right 1 --fps 30
-python -m magicpointer run --left 0 --right 1 --fps 30
+python -m magicpointer run --debug --calibrated --left 0 --right 1 --fps 30
+python -m magicpointer run --calibrated --left 0 --right 1 --fps 30
 ```
 
 With a matching `calibration.json`, debug verifies the wall markers before
 allowing simulated activation. Without usable calibration, debug uses the
-uncalibrated testing mode described above. Real desktop control always requires valid
+uncalibrated testing mode described above. Only explicit `--calibrated` desktop control requires valid
 calibration and marker verification. Marker verification replaces repeating the full checkerboard process
 when the rig stays fixed. During use, visible markers are checked periodically;
 a detected displacement stops the app and requires recalibration. Hidden markers
@@ -315,7 +325,7 @@ after 0.30 s without valid pitch, hold steady to capture a new neutral. Tracking
 loss pauses input while retaining the selected owner. A tilted straight pair takes priority over a
 fist-like classifier label while scrolling, provided its pitch remains valid.
 
-Stereo control uses triangulated finger direction in the primary camera's axes.
+Optional calibrated stereo control uses triangulated finger direction in the primary camera's axes.
 The one-camera debug mode previews the same interaction using model-estimated
 pitch. Keep the cameras approximately level near the screen. Right-click entry
 still requires the normal thumb chord; once scrolling has started, that chord
@@ -325,7 +335,9 @@ are tracked in B6; ignoring them during scrolling does not correct the classifie
 The initial interaction plane is parallel to the camera image plane, centered at
 the activation fist. Resuming after scrolling shifts its mapping to keep the
 pointer at its frozen location. Both whole-hand motion and index-tip motion affect it. A default
-40 × 25 cm workspace maps to the primary display; depth changes do not resize it.
+40 × 25 cm workspace maps to the primary display in calibrated mode. Default
+calibration-free mode maps four palm lengths horizontally and 2.5 vertically;
+these are relative control units, not measured centimetres.
 The cursor is driven by tip **position**, rather than a ray projected along the
 finger. Ring and little fingers stay curled for pointing/clicking/scrolling.
 
@@ -460,7 +472,8 @@ see [B2 analysis](reports/B2-analysis.md) for measured improvements and remainin
 limits. Live confirmation is still needed.
 
 The requested 12-foot range (3.6576 m) is a validation target, not a measured
-claim. Real control rejects wrists beyond that measured range. Resolution,
+claim. Calibrated stereo control rejects wrists beyond that measured range; default
+calibration-free control cannot measure or enforce a physical range. Resolution,
 lighting, exposure, camera spacing, occlusion and model quality affect results.
 Joint-angle classification is rotation invariant in landmark coordinates, but
 real landmark estimation is not guaranteed at every orientation. Fingers hidden

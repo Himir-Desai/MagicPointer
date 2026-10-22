@@ -1,4 +1,4 @@
-"""Regular debug adapter; all selection/control remains in the normal app loop."""
+"""WiLoR desktop/debug adapter; all selection/control remains in the normal app loop."""
 import time
 import numpy as np
 

@@ -133,15 +133,41 @@ class WiLoRAppTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertTrue(fake.closed)
 
-    def test_desktop_wilor_rejected_before_models_capture_or_input(self):
-        args = parser().parse_args(['run','--right','1','--hand-backend','wilor'])
-        with patch('magicpointer.wilor_debug.WiLoRDebug') as model, patch.object(app,'Cameras') as cameras, \
-                patch('magicpointer.desktop.Desktop') as desktop:
-            with self.assertRaisesRegex(ValueError, 'debug-only'):
-                app.run(args)
-            model.assert_not_called()
-            cameras.assert_not_called()
-            desktop.assert_not_called()
+    def test_desktop_uses_same_validated_gestures_and_emits_real_input(self):
+        with patch('magicpointer.wilor_debug.WiLoRDebug', return_value=FakeDebug()):
+            _, rows, _, _, _, _, _ = dual_session('missing', frame_count=102,
+                force_uncalibrated=True, capture_args=('--hand-backend','wilor'))
+        fake = FakeDebug()
+        with patch('magicpointer.wilor_debug.WiLoRDebug', return_value=fake), \
+                patch.object(app, 'DebugLog') as log, patch.object(app.Stereo, 'load') as load:
+            metadata, _, panels, trackers, camera, audio, markers = dual_session(
+                frame_count=102, force_uncalibrated=True, desktop_control=True,
+                capture_args=('--hand-backend','wilor'))
+        expected = [(event['kind'], event['value']) for row in rows for event in row['events']
+                    if event['kind'] in ('move','click','scroll')]
+        actual = [(call[0], list(call.args[0]) if call[0] == 'move' else call.args[0])
+                  for call in metadata['desktop_commands']]
+        self.assertEqual(actual, expected)
+        self.assertEqual([value for kind,value in actual if kind == 'click'], ['left','right'])
+        self.assertTrue(fake.closed)
+        load.assert_not_called()
+        log.assert_not_called()
+        markers.assert_not_called()
+        for tracker in trackers:
+            tracker.detect_all.assert_not_called()
+        self.assertEqual(panels[-1].shape, (540,960,3))
+        camera.__exit__.assert_called_once()
+        audio.close.assert_called_once()
+
+    def test_default_run_promotes_the_successful_configuration(self):
+        args = parser().parse_args(['run','--left','1','--right','2'])
+        self.assertFalse(args.debug)
+        self.assertTrue(args.uncalibrated)
+        self.assertEqual(args.hand_backend, 'wilor')
+        self.assertEqual((args.fps,args.max_hands), ('30',2))
+        self.assertEqual((args.wilor_device,args.wilor_precision,args.wilor_confidence),
+                         ('cuda','auto',.50))
+        self.assertFalse(parser().parse_args(['run','--calibrated']).uncalibrated)
 
     def test_invalid_confidence_rejected_and_cpu_precision_is_explicit(self):
         for value in ('0','1.1','nan','inf'):

@@ -15,7 +15,7 @@ from test_tracking import hand
 
 def debug_session(poses=None, output=None, resources=None):
     """Exercise actual render/engine/dispatch loop, with synthetic camera input."""
-    args = parser().parse_args(['run', '--debug', '--mute'])
+    args = parser().parse_args(['run', '--hand-backend', 'mediapipe', '--debug', '--mute'])
     poses = poses or [Gesture.FIST]*55 + [Gesture.POINT]*5 + [Gesture.LEFT]*8 + [Gesture.POINT]*5 + [Gesture.PALM]*8
     pixels = np.array([(900.+(i%4)*25, 650.-(i//4)*30) for i in range(21)])
     camera = MagicMock()
@@ -82,7 +82,7 @@ class AppTests(unittest.TestCase):
         audio.close.assert_called_once()
 
     def test_capture_failure_cleans_up_tracker_audio_and_camera(self):
-        args = parser().parse_args(['run', '--debug'])
+        args = parser().parse_args(['run', '--hand-backend', 'mediapipe', '--debug'])
         camera, tracker, audio = MagicMock(), MagicMock(), MagicMock()
         camera.__enter__.return_value = camera
         camera.info = [{'index': 0}]

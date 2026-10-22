@@ -1,9 +1,20 @@
-# WiLoR in regular debug (17)
+# WiLoR desktop and debug control (17, 17.1)
 
-This opt-in backend runs the normal virtual pointer, fist selection, clicks,
-scrolling, palm release and automatic data-only diagnostics. It sends no desktop
-input. `run --hand-backend wilor` without `--debug` is rejected before model,
-camera or desktop initialization. MediaPipe remains the default backend.
+The user confirmed the optimized debug trial works and requested desktop promotion.
+WiLoR is now the default for both desktop and debug. Normal `run` controls the
+real pointer, clicks and scrolling without calibration. Add `--debug` for the
+same recognition/motion settings with simulated input and data-only diagnostics.
+
+```powershell
+.\.venv\Scripts\python.exe -m magicpointer run --left 1 --right 2
+```
+
+Defaults match the successful trial: CUDA auto-FP16, confidence 0.50, capture
+30 FPS, up to two candidates per view, temporal/geometry validation, owner
+preservation and fixed thumb geometry. No new dependencies or model downloads
+are required for an existing WiLoR setup. Calibration files are ignored unless
+`--calibrated` is explicitly selected. Q/Escape/window close stops the app;
+fist selection and palm release work as below. Normal runs do not record logs.
 
 Use the existing [WiLoR environment/model setup](model-comparison.md). There are
 no additional dependencies or weights for this experiment. After obtaining this
@@ -18,7 +29,7 @@ end of the range, append `--wilor-confidence 0.45`. The same threshold applies
 to both views and every frame; there is no temporary cross-camera sensitivity
 change. A higher threshold may reject real distant/occluded hands as well as
 false detections. Omit `--right` for one-camera debug. For calibrated virtual
-testing, omit `--uncalibrated` and retain the existing calibration/marker checks.
+testing, replace `--uncalibrated` with `--calibrated` and retain the existing calibration/marker checks.
 
 The preview identifies WiLoR, device, precision and threshold. Hold one fist
 for 2.5 seconds to select the controlling hand. Point to move the virtual pointer;
@@ -91,8 +102,8 @@ long gap resets thumb confirmation. Shared gestures are classified from fused
 geometry; per-camera labels are not votes. No gesture model is trained.
 
 The original comparison command retains its baseline classifier/settings. The
-new rules apply only to the opt-in regular WiLoR debug backend. Desktop control
-and MediaPipe's default gesture rules remain available as the prior reference.
+new rules apply to WiLoR desktop and debug control. MediaPipe's gesture rules
+remain available with `--hand-backend mediapipe`.
 
 ## Logs and live acceptance
 
@@ -107,5 +118,5 @@ Test near and at the seating distance, both cameras together and each alone,
 with point/left/right transitions, a tucked straight thumb, open palm, wrist
 scrolling, selected-hand occlusion and unrelated objects. Check that faster
 processing preserves stable joints, that false hands decline without losing real
-hands, and that pointing no longer becomes a left click. A satisfactory live
-debug trial is required before considering desktop promotion.
+hands, and that pointing no longer becomes a left click. The user confirmed a satisfactory live debug trial and authorized desktop
+promotion in 17.1. Native Windows desktop interaction still needs their live trial.

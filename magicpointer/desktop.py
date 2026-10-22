@@ -1,4 +1,4 @@
-"""Native primary-display input. Imported only for real stereo control."""
+"""Native primary-display input. Imported only for desktop control."""
 import ctypes
 import platform
 

@@ -25,10 +25,10 @@ class StartupTests(unittest.TestCase):
         with redirect_stderr(io.StringIO()):
             self.assertEqual(main(['run', '--left', '0', '--right', '0']), 1)
 
-    def test_one_camera_control_rejected(self):
+    def test_calibrated_control_requires_two_cameras(self):
         with redirect_stderr(io.StringIO()) as output:
-            self.assertEqual(main(['run']), 1)
-        self.assertIn('--debug', output.getvalue())
+            self.assertEqual(main(['run', '--calibrated']), 1)
+        self.assertIn('two cameras', output.getvalue())
 
     def test_camera_open_failure_releases_resources(self):
         with patch('cv2.VideoCapture') as capture:

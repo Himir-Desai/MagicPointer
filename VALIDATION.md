@@ -682,3 +682,27 @@ RTX 4060 FP16 numerical behavior, Windows sustained two-camera FPS, far-hand rec
 false-hand reduction and natural pointing/left-click separation remain pending
 user testing. B17/B18/B19 remain open for live acceptance; there is no promised
 FPS or desktop promotion. Commands and limits are in docs/wilor-debug.md.
+
+
+## 17.1 — Calibration-free WiLoR desktop promotion
+
+The user confirms the optimized debug build works perfectly on their setup and
+authorizes normal desktop control and publication to main. This is qualitative
+live acceptance of the debug trial, superseding the pending-trial status above;
+it is not a measured FPS or recognition benchmark.
+
+The default run now uses the same optimized WiLoR/profile/validation path with
+CUDA auto-FP16, confidence 0.50, 30 FPS and two candidates per view. It ignores
+calibration unless --calibrated is explicit. Image-space motion retains the
+successful debug mapping, single-view continuation and source-change rebasing.
+Only normal mode constructs the native Desktop adapter; no recorder is created.
+
+Final local suite: 159 tests run, 158 passed, one Windows ABI skip. A synthetic
+WiLoR two-view session produces identical desktop-adapter move/click commands
+to debug events, including left/right clicks, selected-view loss and palm release.
+Calibration/marker/recorder bypass, worker cleanup and defaults are checked.
+Existing scroll/ownership/loss regressions pass. Both Python environments pass
+pip check; compileall, CLI help and whitespace checks pass. The 960x540 desktop
+panel was rendered and visually inspected with synthetic inputs. No real cursor
+events were sent. Actual Windows SendInput and sustained desktop use require
+the user's live trial; no new GPU performance claim is made.

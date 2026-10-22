@@ -97,7 +97,7 @@ class DebugRecordingTests(unittest.TestCase):
     def test_interrupt_and_capture_error_save_partial_archive_and_clean_up(self):
         for error in (KeyboardInterrupt(), ValueError('Camera disconnected')):
             with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory() as directory:
-                args = parser().parse_args(['run', '--debug', '--output', directory])
+                args = parser().parse_args(['run', '--hand-backend', 'mediapipe', '--debug', '--output', directory])
                 camera, tracker, audio = MagicMock(), MagicMock(), MagicMock()
                 camera.__enter__.return_value = camera
                 camera.info = [{'index': 0}]
@@ -115,7 +115,7 @@ class DebugRecordingTests(unittest.TestCase):
 
     def test_model_startup_error_still_saves_session_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
-            args = parser().parse_args(['run', '--debug', '--output', directory])
+            args = parser().parse_args(['run', '--hand-backend', 'mediapipe', '--debug', '--output', directory])
             with patch.object(app, 'Tracker', side_effect=ValueError('missing model')), patch.object(app.cv2, 'destroyAllWindows'):
                 with self.assertRaisesRegex(ValueError, 'missing model'):
                     app.run(args)
@@ -138,7 +138,7 @@ class DebugRecordingTests(unittest.TestCase):
         resources['camera'].__exit__.assert_called_once()
 
     def test_non_debug_control_does_not_construct_recorder(self):
-        args = parser().parse_args(['run', '--right', '1'])
+        args = parser().parse_args(['run', '--hand-backend', 'mediapipe', '--right', '1'])
         with patch.object(app.Stereo, 'load') as load, patch.object(app, 'DebugLog') as recorder, \
                 patch.object(app, 'Tracker', side_effect=ValueError('stop before opening cameras')), \
                 patch.object(app.cv2, 'destroyAllWindows'):

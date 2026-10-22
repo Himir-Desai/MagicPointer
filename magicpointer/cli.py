@@ -66,25 +66,27 @@ def parser():
         capture_options(cmd)
         cmd.add_argument("--left", type=camera, default=0, help="primary camera index (default: 0)")
         cmd.add_argument("--right", type=camera, required=name == "calibrate", help="secondary camera index")
-        cmd.add_argument("--fps", choices=("auto", "30", "60"), default="auto", help="requested capture rate; driver may negotiate a lower rate")
+        cmd.add_argument("--fps", choices=("auto", "30", "60"), default="30" if name == "run" else "auto", help="requested capture rate; driver may negotiate a lower rate")
         cmd.add_argument("--calibration", type=Path, default=Path("calibration.json"))
         if name == "run":
             cmd.add_argument("--debug", action="store_true", help="one-/two-camera debug with automatic data recording; stereo preview works before calibration; no OS input")
-            cmd.add_argument("--uncalibrated", action="store_true", help="force approximate image-space testing without calibration; requires --debug")
+            position = cmd.add_mutually_exclusive_group()
+            position.add_argument("--uncalibrated", action="store_true", default=True, help="use approximate image-space control without calibration (default)")
+            position.add_argument("--calibrated", dest="uncalibrated", action="store_false", help="use calibration.json and wall-marker verification for metric stereo control")
             cmd.add_argument("--output", type=Path, default=Path("diagnostics"), help="debug-session recording directory (default: diagnostics)")
             cmd.add_argument("--model", type=Path, default=Path("models/hand_landmarker.task"))
             cmd.add_argument("--workspace-width", type=positive, default=.40, help="local interaction plane width, metres (default: 0.40)")
             cmd.add_argument("--workspace-height", type=positive, default=.25, help="local interaction plane height, metres (default: 0.25)")
             cmd.add_argument("--mirror-x", action=argparse.BooleanOptionalAction, default=True)
             cmd.add_argument("--mute", action="store_true")
-            cmd.add_argument("--max-hands", type=hand_limit, default=4, help="maximum hands detected per camera (1-8, default: 4)")
-            cmd.add_argument('--hand-backend', choices=('mediapipe', 'wilor'), default='mediapipe',
-                             help='WiLoR is an opt-in regular-debug experiment; requires --debug')
+            cmd.add_argument("--max-hands", type=hand_limit, default=2, help="maximum hands detected per camera (1-8, default: 2)")
+            cmd.add_argument('--hand-backend', choices=('mediapipe', 'wilor'), default='wilor',
+                             help='hand recognizer (default: optimized WiLoR; MediaPipe remains optional)')
             wilor_options(cmd)
             cmd.add_argument('--wilor-confidence', type=confidence, default=.50,
-                             help='WiLoR debug detector threshold (default 0.50; try 0.45 for recall)')
+                             help='WiLoR detector threshold (default 0.50; try 0.45 for recall)')
             cmd.add_argument('--wilor-precision', choices=('auto', 'fp16', 'fp32'), default='auto',
-                             help='WiLoR debug: auto uses FP16 on CUDA and FP32 on CPU')
+                             help='WiLoR: auto uses FP16 on CUDA and FP32 on CPU')
         else:
             cmd.add_argument("--square-mm", type=positive, default=25., help="measured checkerboard square edge in mm")
             cmd.add_argument("--marker-size", type=positive, required=True, help="measured wall marker black square edge in metres")
