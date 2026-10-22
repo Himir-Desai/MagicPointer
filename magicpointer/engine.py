@@ -6,6 +6,7 @@ import math
 from typing import Optional, Tuple
 
 from .scrolling import PitchScroll
+from .motion import CursorSmoother
 
 Point = Tuple[float, float, float]
 
@@ -71,6 +72,8 @@ class Engine:
         self._offset = (0., 0.)
         self._rebase = False
         self._last_move = None
+        self.motion = CursorSmoother()
+        self._pointing_started = False
 
     def reset_activation(self):
         self._fist_seconds = 0.
@@ -81,6 +84,7 @@ class Engine:
         """Preserve the cursor when its coordinate source changes."""
         self._rebase = True
         self._last_move = None
+        self.motion.reset()
         self.scroll.reset()
 
     @property
@@ -102,6 +106,7 @@ class Engine:
             self._action_latched = True
             self._rebase = True
             self._last_move = self._exit_since = None
+            self.motion.reset()
             self.scroll.reset()
         self.paused = True
 
@@ -118,6 +123,8 @@ class Engine:
         self._offset = (0., 0.)
         self._rebase = False
         self._last_move = None
+        self.motion.reset()
+        self._pointing_started = False
         return [Event("deactivate", reason)]
 
     def step(self, observation: Optional[Observation], now: float):
@@ -210,6 +217,10 @@ class Engine:
             self._exit_since = None
             lines = self.scroll.update(observation.scroll_pitch, now)
             return [Event("scroll", lines)] if lines else []
+        if gesture == Gesture.FIST and self._pointing_started:
+            # Keep the cursor parked while the hand is lowered/repositioned.
+            # First returning point establishes the new relative origin.
+            self.rebase_motion()
         if gesture in (Gesture.FIST, Gesture.POINT) and elapsed >= self.dwell:
             self._action_latched = False
         events = []
@@ -221,9 +232,12 @@ class Engine:
                 self._offset = tuple(a-b for a, b in zip(self.cursor, raw))
                 self._rebase = False
             target = tuple(max(0., min(1., value+offset)) for value, offset in zip(raw, self._offset))
-            # Time-based low-pass smoothing behaves similarly at 30 and 60 Hz.
-            alpha = 1.0 if self._last_move is None else 1 - math.exp(-max(dt, 0) / .045)
-            self.cursor = tuple(a + alpha * (b - a) for a, b in zip(self.cursor, target))
+            if self._last_move is None:
+                self.motion.reset()
+                self.cursor = target
+            else:
+                self.cursor = self.motion.update(target, self.cursor, now-self._last_move)
+            self._pointing_started = True
             self._last_move = now
             events.append(Event("move", self.cursor))
         if elapsed < self.dwell:
