@@ -1,4 +1,4 @@
-"""Short synthesized activation/deactivation sounds; no camera-loop blocking."""
+"""Short synthesized activation/deactivation and click sounds; no camera-loop blocking."""
 import io
 import math
 import platform
@@ -14,8 +14,12 @@ import wave
 def tone(activate):
     samples = bytearray()
     rate = 22050
-    for frequency in ((660, 880) if activate else (440, 330)):
-        n = int(rate * .075)
+    frequencies, duration = {
+        True: ((660, 880), .075), False: ((440, 330), .075),
+        'left': ((1100,), .045), 'right': ((750, 1000), .035),
+    }[activate]
+    for frequency in frequencies:
+        n = int(rate * duration)
         for i in range(n):
             envelope = math.sin(math.pi*i/n) ** 2
             samples.extend(struct.pack('<h', int(4500 * envelope * math.sin(2*math.pi*frequency*i/rate))))
@@ -32,7 +36,7 @@ class Chimes:
     def __init__(self, muted=False):
         self.muted = muted
         self.messages = queue.Queue(maxsize=4)
-        self.sounds = {True: tone(True), False: tone(False)}
+        self.sounds = {key: tone(key) for key in (True, False, "left", "right")}
         self.worker = threading.Thread(target=self._play, daemon=True)
         self.worker.start()
 

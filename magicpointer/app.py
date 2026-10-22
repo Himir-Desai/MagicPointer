@@ -320,6 +320,7 @@ def run(args):
                         last_action, action_until = f"{event.value} click", now + .5
                         if desktop:
                             desktop.click(event.value)
+                        audio.play(event.value)
                     elif event.kind == "scroll":
                         last_action, action_until = f"scroll {event.value:+d}", now + .3
                         if desktop:
