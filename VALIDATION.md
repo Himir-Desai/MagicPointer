@@ -782,3 +782,38 @@ short contact can fall between observations; curled-finger occlusion and landmar
 error can invent/hide proximity. Natural-speed recall, false taps and aim drift
 need the user's Windows trial before accepting or merging this experiment.
 See docs/thumb-tap.md for the command and initial thresholds.
+
+
+## 18.1 — Open-thumb pointing, close/reopen left click and movement tuning
+
+The user reports that the original contact-tap trial still feels awkward. This
+revision replaces its distance-to-curled-fingers detector with the existing
+WiLoR thumb state: thumb + index extended points, brief thumb closure pauses,
+and a confirmed reopening emits one left click. No finger contact is required.
+Right-click, scroll, fist and palm rules stay on the prior path. Thumb closure
+requires two samples spanning at least 40 ms; reopening retains the existing
+80-ms/two-sample confirmation. A closure over 0.8 seconds cancels the click.
+Loss/identity/source/stale-input cancellation remains; no closed-pose repeats.
+The pointer is parked during closure/uncertain reopening and rebased on reopening
+so the click and subsequent pointing resume at the parked position.
+
+App default workspace changes from 0.40 x 0.25 to 0.32 x 0.20: 20% less arm
+travel, or 25% more cursor displacement for the same movement. Explicit workspace
+options override it. Screen-space deadband increases to 0.003 and smoothing time
+constants to 180 ms near a target / 75 ms for large moves. Engine's standalone
+metric default is unchanged; the normal/debug app receives the new CLI defaults.
+
+Full suite: 183 run, 182 passed, one Windows ABI check skipped on macOS. Checks
+cover open/close/reopen and single-spike/held closures, pose transforms, cancelled
+cycles, unchanged right/palm, inactive/scroll suppression, both actual app paths
+with a mocked Desktop adapter, left/right sounds, parked click coordinates,
+smoothing/jitter/rebase and explicit/default workspace gain. Dependencies,
+compileall, CLI help and whitespace checks pass. The updated desktop panel was
+rendered and visually inspected using synthetic hands. Its CUDA/FPS labels are
+mocked and are not GPU measurements. No real OS input events were sent.
+
+These checks establish implementation behavior, not natural thumb recognition,
+comfort or aim accuracy. Fast closures still require enough sampled frames to
+be observed. The update stays on feat/thumb-tap-click pending a satisfactory
+Windows trial; main remains unchanged. docs/thumb-tap.md supersedes the contact
+threshold instructions from prompt 18.

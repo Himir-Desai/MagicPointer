@@ -29,6 +29,7 @@ class Observation:
     scroll_pitch: Optional[float] = None
     point_shape: bool = False
     thumb_tap: bool = False
+    pointer_pause: bool = False
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,8 @@ class Engine:
             self._exit_since = None
             lines = self.scroll.update(observation.scroll_pitch, now)
             return [Event("scroll", lines)] if lines else []
+        if observation.pointer_pause:
+            self.rebase_motion()
         if gesture == Gesture.FIST and self._pointing_started:
             # Keep the cursor parked while the hand is lowered/repositioned.
             # First returning point establishes the new relative origin.

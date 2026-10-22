@@ -1,20 +1,13 @@
-"""Experimental thumb-to-curled-finger tap from fused WiLoR joints.
-
-Distances indicate estimated proximity, never proof of physical contact.
-"""
+"""Experimental open-thumb pointing with close/reopen left clicks."""
 import math
-
-import numpy as np
 
 from .engine import Gesture
 from .tracking import gesture_metrics
-from .wilor_gestures import ThumbFilter, segment_distance
+from .wilor_gestures import ThumbFilter
 
 
 class ThumbTapFilter:
-    contact_distance = .12
-    release_distance = .24
-    max_contact_seconds = .8
+    max_closed_seconds = .8
 
     def __init__(self):
         self.chords = ThumbFilter()
@@ -25,16 +18,10 @@ class ThumbTapFilter:
         self._reset_tap()
 
     def _reset_tap(self):
-        self.key = self.last = self.since = self.contact_since = None
-        self.zone = None
+        self.key = self.last = self.closed_since = None
+        self.since = None
         self.hits = 0
-        self.state = 'waiting for thumb lift'
-
-    def _confirm(self, zone, now, duration):
-        if zone != self.zone:
-            self.zone, self.since, self.hits = zone, now, 0
-        self.hits += 1
-        return self.hits >= 2 and now-self.since >= duration
+        self.state = 'waiting for open thumb'
 
     def update(self, key, hand, now):
         if hand is None:
@@ -45,7 +32,6 @@ class ThumbTapFilter:
             hand.gesture = Gesture.UNKNOWN
             hand.diagnostics = {'thumb_tap': {'state': 'invalid time', 'click': False}}
             return hand
-        # A missing view/source change must not supply the far end of a tap.
         tap_key = (key, tuple((hand.diagnostics or {}).get('fusion_views', ())))
         if tap_key != self.key or self.last is None or now-self.last > .6:
             self._reset_tap()
@@ -60,55 +46,49 @@ class ThumbTapFilter:
         hand.diagnostics = hand.diagnostics or {}
         base = gesture_metrics(hand.world)
         eligible = base['valid'] and base['signature'][1:] == [1,0,0,0]
-        distance, pulse = None, False
-        if eligible:
-            p = np.asarray(hand.world, float)
-            width = float(np.linalg.norm(p[5]-p[17]))
-            eligible = width > 1e-6
-            if eligible:
-                # Only the distal chains of middle/ring/little are tap surfaces;
-                # the extended index and knuckles are intentionally excluded.
-                distance = min(segment_distance(p[4], p[4], p[start+i], p[start+i+1])
-                               for start in (9,13,17) for i in (1,2))/width
+        thumb = hand.diagnostics.get('gesture_metrics', {}).get('signature', [-1])[0]
+        pulse, pause = False, False
         if not eligible:
-            self.state = 'waiting for thumb lift'
-            self.zone = self.since = self.contact_since = None
+            self.state = 'waiting for open thumb'
+            self.closed_since = self.since = None
             self.hits = 0
         else:
-            # Thumb extension is no longer a left-click chord in this mode.
-            # Two-finger right click, scrolling, fist and palm remain unchanged.
-            hand.gesture = Gesture.POINT
-            zone = ('near' if distance <= self.contact_distance else
-                    'away' if distance >= self.release_distance else 'between')
-            duration = .08 if self.state == 'waiting for thumb lift' else .04
-            confirmed = self._confirm(zone, now, duration)
-            if self.contact_since is not None and now-self.contact_since > self.max_contact_seconds:
-                self.state = 'waiting for thumb lift'
-                self.zone = self.since = self.contact_since = None
+            # The original thumb hysteresis/opening confirmation is reused.
+            # Only an open thumb with the pointing index moves the cursor.
+            hand.gesture = Gesture.POINT if thumb == 1 else Gesture.UNKNOWN
+            pause = thumb != 1
+            if self.closed_since is not None and now-self.closed_since > self.max_closed_seconds:
+                self.state = 'waiting for open thumb'
+                self.closed_since = self.since = None
                 self.hits = 0
-            elif self.state == 'waiting for thumb lift' and zone == 'away' and confirmed:
-                self.state = 'ready'
-                self.zone = None
-            elif self.state == 'ready' and zone == 'near':
-                self.contact_since = now
-                self.state = 'approaching fingers'
-            elif self.state == 'approaching fingers':
-                if zone == 'near' and confirmed:
-                    self.state = 'contact estimated'
-                    self.zone = None
-                elif zone == 'away':
+            elif self.state == 'waiting for open thumb':
+                if thumb == 1:
                     self.state = 'ready'
-                    self.contact_since = None
-                    self.zone = None
-            elif self.state == 'contact estimated' and zone == 'away' and confirmed:
+            elif self.state == 'ready':
+                if thumb == 0:
+                    self.state = 'closing thumb'
+                    self.closed_since = self.since = now
+                    self.hits = 1
+            elif self.state == 'closing thumb':
+                if thumb == 0:
+                    self.hits += 1
+                    if self.hits >= 2 and now-self.since >= .04:
+                        self.state = 'thumb closed'
+                else:
+                    # A single closed sample/uncertain interruption is not a tap.
+                    self.state = 'ready' if thumb == 1 else 'waiting for open thumb'
+                    self.closed_since = self.since = None
+                    self.hits = 0
+            elif self.state == 'thumb closed' and thumb == 1:
                 pulse = True
-                self.state = 'waiting for thumb lift'
-                self.zone = self.since = self.contact_since = None
+                self.state = 'ready'
+                self.closed_since = self.since = None
                 self.hits = 0
         hand.diagnostics['thumb_tap'] = {
-            'state': self.state, 'eligible': eligible, 'click': pulse,
-            'distance_palm_widths': distance, 'contact_threshold': self.contact_distance,
-            'release_threshold': self.release_distance, 'max_contact_seconds': self.max_contact_seconds,
-            'contact_since': self.contact_since, 'fresh_samples': self.hits,
-            'note': 'estimated 3D proximity; not physical contact or calibrated confidence'}
+            'method': 'open-close-reopen', 'state': self.state,
+            'eligible': eligible, 'click': pulse, 'pointer_pause': pause,
+            'thumb_state': thumb, 'closed_since': self.closed_since,
+            'max_closed_seconds': self.max_closed_seconds,
+            'closed_samples': self.hits, 'minimum_closed_seconds': .04,
+            'note': 'estimated thumb state; no finger contact required'}
         return hand

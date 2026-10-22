@@ -87,14 +87,15 @@ normalized by the activation palm size, with no measured depth or distance limit
 ## Thumb-tap left click (experimental branch)
 
 On `feat/thumb-tap-click`, try the actual app with left click triggered by a thumb
-tap against the three curled fingers; right click stays unchanged:
+brief thumb close-and-reopen; right click stays unchanged:
 
 ```powershell
 .\.venv\Scripts\python.exe -m magicpointer run --left 1 --right 2 --left-click thumb-tap
 ```
 
-Slightly lift the thumb, tap the curled fingers, then lift it again. Click fires
-on release. Add `--debug` for tap-state feedback and data-only recording without
+Keep thumb + index extended to point. Briefly close the thumb, then reopen it
+to left click; physical finger contact is not required. Pointing pauses while
+the thumb is closed and resumes at the parked cursor. Add `--debug` for tap-state feedback and data-only recording without
 OS input. The original left-click chord remains the default. See the
 [thumb-tap trial guide](docs/thumb-tap.md) for timing and tracking limitations.
 This experiment is not yet accepted for main.
@@ -361,8 +362,8 @@ are tracked in B6; ignoring them during scrolling does not correct the classifie
 The initial interaction plane is parallel to the camera image plane, centered at
 the activation fist. Resuming after scrolling shifts its mapping to keep the
 pointer at its frozen location. Both whole-hand motion and index-tip motion affect it. A default
-40 × 25 cm workspace maps to the primary display in calibrated mode. Default
-calibration-free mode maps four palm lengths horizontally and 2.5 vertically;
+32 × 20 cm workspace maps to the primary display in calibrated mode. Default
+calibration-free mode maps 3.2 palm lengths horizontally and 2.0 vertically;
 these are relative control units, not measured centimetres.
 The cursor is driven by tip **position**, rather than a ray projected along the
 finger. Ring and little fingers stay curled for pointing/clicking/scrolling.

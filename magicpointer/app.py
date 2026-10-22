@@ -96,7 +96,9 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         combined, reason, _ = combine(hands, ignore_thumb=scrolling)
         if combined is None:
             return None, reason
-    tap = bool((combined.diagnostics or {}).get('thumb_tap', {}).get('click'))
+    tap_info = (combined.diagnostics or {}).get('thumb_tap', {})
+    tap = bool(tap_info.get('click'))
+    pointer_pause = bool(tap_info.get('pointer_pause'))
     pitch = None
     shape, _ = measure(combined, allow_thumb=True)
     if shape is not None:
@@ -108,7 +110,7 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         if available is None:
             return None, 'No selected hand visible'
         points = available.pixels/mono_scale
-        return Observation(combined.gesture, (*points[0], 0.), (*points[8], 0.), pitch, index_only(combined), tap), 'Combined gesture; approximate image-space pointer'
+        return Observation(combined.gesture, (*points[0], 0.), (*points[8], 0.), pitch, index_only(combined), tap, pointer_pause), 'Combined gesture; approximate image-space pointer'
     indices = [0]+list(range(5, 21)) if scrolling or combined.gesture == Gesture.SCROLL else list(range(21))
     points = stereo.reconstruct(left.pixels[indices], right.pixels[indices]) if left is not None and right is not None else None
     if points is not None and np.linalg.norm(points[0]) > 3.6576:
@@ -121,13 +123,13 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         if available is None:
             return None, 'No selected hand visible'
         mapped, _ = approximate.map(available, view, reference)
-        return Observation(combined.gesture, tuple(mapped[0]), tuple(mapped[8]), pitch, index_only(combined), tap), 'APPROXIMATE single-camera pointer; no measured depth'
+        return Observation(combined.gesture, tuple(mapped[0]), tuple(mapped[8]), pitch, index_only(combined), tap, pointer_pause), 'APPROXIMATE single-camera pointer; no measured depth'
     if approximate is not None:
         approximate.reset()
     indexed = dict(zip(indices, points))
     if shape is not None:
         pitch, _ = direction_pitch([indexed[i] for i in (5, 8, 9, 12)])
-    return Observation(combined.gesture, tuple(indexed[0]), tuple(indexed[8]), pitch, index_only(combined), tap), 'Combined gesture; calibrated stereo position'
+    return Observation(combined.gesture, tuple(indexed[0]), tuple(indexed[8]), pitch, index_only(combined), tap, pointer_pause), 'Combined gesture; calibrated stereo position'
 
 
 def run(args):
@@ -389,10 +391,9 @@ def run(args):
                 if tap_mode:
                     tap_info = ((selection.combined.diagnostics or {}).get('thumb_tap', {})
                                 if selection.combined else {})
-                    gap = tap_info.get('distance_palm_widths')
-                    gap_text = '--' if gap is None else f'{gap:.2f}'
-                    lines.append('LEFT TAP: ' + tap_info.get('state', 'no selected hand') +
-                                 f' | gap {gap_text} palm widths | RIGHT: thumb chord')
+                    thumb_text = {1: 'open', 0: 'closed', -1: 'uncertain'}.get(tap_info.get('thumb_state'), '--')
+                    lines.append('LEFT: CLOSE/REOPEN | ' + tap_info.get('state', 'no selected hand') +
+                                 f' | thumb {thumb_text} | RIGHT: thumb chord')
                 if engine.scrolling:
                     scroll = engine.scroll
                     feedback = "Hold two fingers steady: setting scroll neutral"

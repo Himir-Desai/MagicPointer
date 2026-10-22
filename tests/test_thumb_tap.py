@@ -15,9 +15,7 @@ from test_two_camera_debug import dual_session
 
 
 def tap_hand(gap, *, transform=None, fingers=(1,0,0,0), views=(0,1)):
-    world = hand(False, fingers)
-    width = np.linalg.norm(world[5]-world[17])
-    world[4] = [0.,-.09,.03+gap*width]
+    world = hand(gap >= .2, fingers)
     if transform:
         rotation, scale, offset = transform
         world = world @ rotation * scale + offset
@@ -35,7 +33,8 @@ class ThumbTapTests(unittest.TestCase):
     def test_complete_tap_emits_once_and_extension_alone_never_clicks(self):
         results = self.sequence([.35]*4+[.05]*3+[.35]*5)
         self.assertEqual(sum(r.diagnostics['thumb_tap']['click'] for r in results),1)
-        self.assertTrue(all(r.gesture == Gesture.POINT for r in results))
+        self.assertFalse(any(r.gesture == Gesture.LEFT for r in results))
+        self.assertTrue(any(r.gesture == Gesture.UNKNOWN for r in results))
         results = self.sequence([.35]*15)
         self.assertFalse(any(r.diagnostics['thumb_tap']['click'] for r in results))
 
@@ -68,6 +67,19 @@ class ThumbTapTests(unittest.TestCase):
             transform = rotation,rng.uniform(.4,3.),rng.normal(size=3)
             results = self.sequence([.35]*3+[.05]*3+[.35]*3,transform=transform)
             self.assertEqual(sum(r.diagnostics['thumb_tap']['click'] for r in results),1)
+
+    def test_closed_thumb_pauses_and_open_thumb_points_without_requiring_contact(self):
+        results = self.sequence([.35]*4+[.05]*3+[.35]*4)
+        self.assertEqual(results[3].gesture,Gesture.POINT)
+        self.assertEqual(results[5].gesture,Gesture.UNKNOWN)
+        self.assertTrue(results[5].diagnostics['thumb_tap']['pointer_pause'])
+        self.assertEqual(results[-1].gesture,Gesture.POINT)
+        self.assertFalse(results[-1].diagnostics['thumb_tap']['pointer_pause'])
+
+    def test_missing_closed_thumb_reopening_does_not_click(self):
+        # A long closure cancels, even when the thumb later reopens.
+        results = self.sequence([.35]*4+[.05]*12+[.35]*5)
+        self.assertFalse(any(r.diagnostics['thumb_tap']['click'] for r in results))
 
     def test_right_click_and_palm_keep_existing_thumb_filter(self):
         from magicpointer.wilor_gestures import ThumbFilter
@@ -128,7 +140,7 @@ class ThumbTapAppTests(unittest.TestCase):
                           if call.args[0] in ('left','right')],clicks)
         self.assertTrue(fake.closed)
 
-    def test_debug_records_tap_geometry_without_desktop_input(self):
+    def test_debug_records_thumb_cycle_without_desktop_input(self):
         with patch('magicpointer.wilor_debug.WiLoRDebug',return_value=TappingDebug()):
             metadata, rows, _, _, _, _, _ = dual_session(frame_count=102,
                 force_uncalibrated=True,
@@ -139,7 +151,11 @@ class ThumbTapAppTests(unittest.TestCase):
         taps = [row['selection']['combined_hand']['model_diagnostics']['thumb_tap'] for row in rows
                 if row['selection']['combined_hand'] is not None]
         self.assertTrue(any(tap['click'] for tap in taps))
-        self.assertTrue(any(tap['distance_palm_widths'] is not None for tap in taps))
+        self.assertTrue(any(tap['thumb_state'] == 0 for tap in taps))
+        click_row = next(row for row in rows if any(event['kind']=='click' and
+                         event['value']=='left' for event in row['events']))
+        self.assertEqual(click_row['cursor'],rows[64]['cursor'])
+        self.assertFalse(any(event['kind']=='move' for row in rows[65:70] for event in row['events']))
 
     def test_wrong_backend_rejected_before_model_camera_and_input(self):
         args = parser().parse_args(['run','--hand-backend','mediapipe','--left-click','thumb-tap'])

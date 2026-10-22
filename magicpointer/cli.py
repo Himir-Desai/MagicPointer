@@ -75,15 +75,15 @@ def parser():
             position.add_argument("--calibrated", dest="uncalibrated", action="store_false", help="use calibration.json and wall-marker verification for metric stereo control")
             cmd.add_argument("--output", type=Path, default=Path("diagnostics"), help="debug-session recording directory (default: diagnostics)")
             cmd.add_argument("--model", type=Path, default=Path("models/hand_landmarker.task"))
-            cmd.add_argument("--workspace-width", type=positive, default=.40, help="local interaction plane width, metres (default: 0.40)")
-            cmd.add_argument("--workspace-height", type=positive, default=.25, help="local interaction plane height, metres (default: 0.25)")
+            cmd.add_argument("--workspace-width", type=positive, default=.32, help="interaction width; metres if calibrated (default: 0.32)")
+            cmd.add_argument("--workspace-height", type=positive, default=.20, help="interaction height; metres if calibrated (default: 0.20)")
             cmd.add_argument("--mirror-x", action=argparse.BooleanOptionalAction, default=True)
             cmd.add_argument("--mute", action="store_true")
             cmd.add_argument("--max-hands", type=hand_limit, default=2, help="maximum hands detected per camera (1-8, default: 2)")
             cmd.add_argument('--hand-backend', choices=('mediapipe', 'wilor'), default='wilor',
                              help='hand recognizer (default: optimized WiLoR; MediaPipe remains optional)')
             cmd.add_argument('--left-click', choices=('thumb-chord', 'thumb-tap'), default='thumb-chord',
-                             help='left-click method; thumb-tap is an experimental WiLoR tap on curled fingers')
+                             help='left-click method; thumb-tap is an experimental WiLoR thumb close/reopen')
             wilor_options(cmd)
             cmd.add_argument('--wilor-confidence', type=confidence, default=.50,
                              help='WiLoR detector threshold (default 0.50; try 0.45 for recall)')

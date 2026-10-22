@@ -1,62 +1,55 @@
-# Thumb-tap left-click trial (18, B24)
+# Thumb close-and-reopen left-click trial (18.1, B24)
 
-This branch tests the user's proposed slight thumb lift and tap against the
-three curled fingers, in the **actual desktop app**. It includes the B20–B23
-smoothing, fist repositioning, five-second owner timeout and click sounds.
-It does not change right click. It remains separate from main until a successful
-user trial; synthetic testing cannot establish natural-tap accuracy.
-
-Use the existing WiLoR environment and weights; no new dependencies are needed.
-For the user's camera indices:
+This revision replaces the previous contact-tap detector, which the user found
+awkward. In `--left-click thumb-tap` mode, **thumb + index extended** is now the
+pointing pose. Briefly close the thumb, then reopen it to left click. Middle,
+ring and little stay curled throughout. Physical finger contact is not required.
+Right click keeps its existing thumb-plus-index-and-middle chord.
 
 ```powershell
 .\.venv\Scripts\python.exe -m magicpointer run --left 1 --right 2 --left-click thumb-tap
 ```
 
-Hold one fist for 2.5 seconds to select the hand. Point with the index, keeping
-middle/ring/little curled. Slightly lift the thumb away from those fingers,
-tap it down against them, then lift it again. **Left click fires on separation
-after the tap**, with the normal left-click sound. Resting it against the curled
-fingers or holding it extended does not click. The right-click thumb-plus-index-
-and-middle chord, scroll mode, fist repositioning and palm release are unchanged.
-Cursor movement still comes from the pointing index, with smoothing; this trial
-does not add cursor freezing or a dwell-to-lock target.
+Hold a fist for 2.5 seconds to activate first. Keep the thumb open while pointing.
+Closure pauses movement; a confirmed reopen emits one left click, plays its
+sound, and rebases pointing at the parked cursor. Holding the thumb closed does
+not repeatedly click. Closure lasting more than 0.8 seconds cancels the click;
+reopen to return to pointing. A fist still lets you reposition, a palm releases
+ownership, and five seconds without the selected hand releases a forgotten lock.
 
-Append `--debug` to simulate input and automatically record the data-only archive.
-That preview displays the tap state. The archive's combined-hand
-`model_diagnostics.thumb_tap` records distances, thresholds, timing, eligibility
-and one-frame click pulses. Raw per-view thumb gesture metrics remain available
-as reference; a thumb extension with only the index extended is treated as
-pointing rather than the old left-click chord in tap mode.
+This branch also uses slightly stronger smoothing and a smaller default workspace:
+0.32 by 0.20, down from 0.40 by 0.25. The same motion moves the cursor 25% farther.
+In default calibration-free mode, this maps 3.2 palm lengths horizontally and
+2.0 vertically, not measured metres. Calibrated mode uses metric dimensions.
+Use `--workspace-width 0.40 --workspace-height 0.25` to restore the old gain;
+smaller values increase cursor travel. These workspace flags do not change the
+recognizer. Smoothing now uses a soft 0.003 screen-unit deadband and time constants
+from 180 ms near a target to 75 ms for large motion.
 
-Omit `--left-click thumb-tap` (or use `--left-click thumb-chord`) for the existing
-left-click method. Tap mode currently requires WiLoR. Both run modes use the same
-recognition; debug sends no desktop input. No calibration is required.
+Append `--debug` to simulate input and save data-only diagnostics. The panel
+shows cycle state and whether the thumb is open/closed/uncertain. The combined
+hand's `model_diagnostics.thumb_tap` records those states, timing, pause flags
+and click pulses. Full thumb geometry remains in gesture metrics. Normal runs
+control the actual desktop and do not record diagnostics.
 
-## What the detector measures
+Omit `--left-click thumb-tap` (or use `--left-click thumb-chord`) for the original
+chord interaction. This trial requires WiLoR, reuses existing dependencies and
+weights, and requires no calibration. It remains on `feat/thumb-tap-click`;
+main integration awaits a satisfactory user trial.
 
-The [WiLoR model](https://github.com/rolpotamias/WiLoR) reconstructs hand geometry.
-This trial uses its existing 21 joints, not a learned contact classifier or a
-physical touch measurement. It estimates the shortest 3D thumb-tip distance to
-the distal chains of the curled middle/ring/little fingers, normalized by palm
-width. Geometry from associated views is fused before tap recognition; views do
-not vote independently.
+The recognizer uses the existing WiLoR palm-relative thumb state after geometry
+fusion. An open thumb uses the existing stronger entry/weaker retention rules
+and at least two fresh observations spanning 0.08 seconds. Closing must remain
+clearly closed for at least two observations spanning 0.04 seconds. Reopening
+uses the same confirmed-open rule and emits a single pulse. Ambiguous closure,
+lost geometry, changed selected identity or contributing camera views, stale
+frames or a gap over 0.6 seconds cancel an incomplete cycle. Two extended fingers
+switch to the existing right-click/scroll rules and cancel the left-click cycle.
 
-Initial trial thresholds: at least 0.24 palm widths away arms the tap; at most
-0.12 estimates contact; at least 0.24 again confirms release. Each transition
-needs two fresh observations, spanning 0.08 seconds for initial arming and 0.04
-seconds for contact/release. Contact lasting over 0.8 seconds cancels the cycle.
-The index must remain extended and all three other fingers curled throughout.
-Changing selected identity or contributing camera views, missing geometry,
-stale timestamps or a gap over 0.6 seconds cancels an incomplete tap.
-
-At low processing FPS, short taps may fall entirely between observations. Start
-with a deliberate tap long enough to show up in at least two processed frames;
-then try your natural speed. Occlusion/model error can invent or hide proximity.
-The thresholds are initial engineering choices, not a measured contact accuracy.
-
-Try both hands, seated distance and camera viewpoints, resting the thumb,
-ordinary pointing, isolated taps, repeated taps, right clicks and scrolling.
-Report missed/accidental clicks and pointer drift. If unreliable, a debug archive
-can show whether the motion was observed and which transition failed. It contains
-no camera images, video or audio.
+At low processing FPS, an instantaneous closure may fall between frames. Start
+with a deliberate close/reopen visible in at least two processed frames, then
+try a natural pace. Landmark errors can still hide or invent a thumb transition;
+synthetic tests do not establish reliability on your hand. Try both hands,
+resting/held/brief thumb closures, pointing, right clicking and scrolling at your
+usual seating distance. Report missed/accidental clicks and pointer drift; a
+debug archive contains useful states without images, video or audio.

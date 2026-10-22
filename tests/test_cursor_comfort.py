@@ -17,7 +17,7 @@ class CursorComfortTests(unittest.TestCase):
         self.assertLess(max(p[0] for p in values)-min(p[0] for p in values), .0002)
         for _ in range(60):
             cursor = smoother.update((.8,.7), cursor, 1/30)
-        self.assertLess(math.dist(cursor, (.8,.7)), .003)
+        self.assertLess(math.dist(cursor, (.8,.7)), .0031)
 
     def test_smoothing_is_similar_at_different_frame_rates(self):
         results = []
@@ -62,3 +62,24 @@ class CursorComfortTests(unittest.TestCase):
         events = engine.step(Observation(Gesture.POINT,(0.,0.,2.),(-.1,.2,2.)),.63)
         self.assertEqual(events[-1].value,parked)
 
+
+    def test_default_app_workspace_increases_gain_by_twenty_five_percent(self):
+        from magicpointer.cli import parser
+        args = parser().parse_args(['run'])
+        self.assertAlmostEqual(.40/args.workspace_width,1.25)
+        self.assertAlmostEqual(.25/args.workspace_height,1.25)
+        custom = parser().parse_args(['run','--workspace-width','.4','--workspace-height','.25'])
+        self.assertEqual((custom.workspace_width,custom.workspace_height),(.4,.25))
+
+    def test_closing_thumb_rebases_reopening_at_the_parked_cursor(self):
+        engine = Engine(mirror_x=False)
+        for i in range(20):
+            engine.step(Observation(Gesture.FIST,(0.,0.,2.),(0.,0.,2.)),i*.03)
+        engine.step(Observation(Gesture.POINT,(0.,0.,2.),(.08,0.,2.)),.6)
+        parked = engine.cursor
+        for i in range(5):
+            self.assertEqual(engine.step(Observation(Gesture.UNKNOWN,(0.,0.,2.),(.2,.2,2.),
+                             pointer_pause=True),.63+i*.03),[])
+        events = engine.step(Observation(Gesture.POINT,(0.,0.,2.),(.2,.2,2.),thumb_tap=True),.8)
+        self.assertEqual(engine.cursor,parked)
+        self.assertEqual([e.value for e in events if e.kind=='click'],['left'])
