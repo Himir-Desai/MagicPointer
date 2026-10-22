@@ -164,6 +164,7 @@ def run(args):
     previous_wrist, previous_wrist_time = None, None
     approximate = ApproximateMotion()
     previous_source = None
+    missing_owner_since = None
     try:
         if args.debug:
             log = DebugLog(args.output, {'camera_indices': [args.left] + ([args.right] if two_cameras else []),
@@ -256,6 +257,13 @@ def run(args):
                 if not paired:
                     owner.palm_since, owner.release_ready = None, False
                 hands = selection.hands or [None]*len(frames)
+                if owner.owner and not any(hand is not None for hand in hands):
+                    if missing_owner_since is None:
+                        missing_owner_since = now
+                else:
+                    missing_owner_since = None
+                owner_timed_out = (missing_owner_since is not None and
+                                   now-missing_owner_since >= 5.)
                 observation, reason = None, selection.reason
                 left = hands[0]
                 available = next((hand for hand in hands if hand is not None), None)
@@ -295,6 +303,9 @@ def run(args):
                 engine_before = engine.diagnostics(engine_now)
                 phase = time.perf_counter()
                 events = engine.step(observation, engine_now)
+                if owner_timed_out:
+                    events += engine.stop('hand absence timeout')
+                    missing_owner_since = None
                 timings['engine_ms'] = (time.perf_counter()-phase)*1000
                 if not engine.active and engine.activation_progress > 0:
                     selection.progress = engine.activation_progress
@@ -308,10 +319,11 @@ def run(args):
                         audio.play(True)
                     elif event.kind == "deactivate":
                         previous_wrist = None
-                        if event.value == 'open palm':
+                        if event.value in ('open palm', 'hand absence timeout'):
                             owner.release()
                             approximate.reset()
                             previous_source = None
+                            previous_key = None
                             selection.reason = 'HAND RELEASED - SHOW ONE FIST'
                         audio.play(False)
                     elif event.kind == "move" and desktop:
