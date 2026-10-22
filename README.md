@@ -84,6 +84,21 @@ do not record diagnostics. Omit `--right` for one-camera use; one selected view
 can also continue when the other view loses the hand. Uncalibrated movement is
 normalized by the activation palm size, with no measured depth or distance limit.
 
+## Thumb-tap left click (experimental branch)
+
+On `feat/thumb-tap-click`, try the actual app with left click triggered by a thumb
+tap against the three curled fingers; right click stays unchanged:
+
+```powershell
+.\.venv\Scripts\python.exe -m magicpointer run --left 1 --right 2 --left-click thumb-tap
+```
+
+Slightly lift the thumb, tap the curled fingers, then lift it again. Click fires
+on release. Add `--debug` for tap-state feedback and data-only recording without
+OS input. The original left-click chord remains the default. See the
+[thumb-tap trial guide](docs/thumb-tap.md) for timing and tracking limitations.
+This experiment is not yet accepted for main.
+
 ## Try one camera first
 
 ```sh

@@ -113,7 +113,7 @@ class ThumbFilter:
         result['thumb']['state'] = result['signature'][0]
         hand.gesture = from_signature(result['signature'])
         result['gesture'] = hand.gesture.value
-        hand.diagnostics = {'gesture_metrics': result,
+        hand.diagnostics = {**(hand.diagnostics or {}), 'gesture_metrics': result,
                             'thumb_confirmation': {'open': self.open, 'fresh_samples': self.hits,
                                                    'minimum_samples': 2, 'minimum_seconds': .08}}
         return hand

@@ -82,6 +82,8 @@ def parser():
             cmd.add_argument("--max-hands", type=hand_limit, default=2, help="maximum hands detected per camera (1-8, default: 2)")
             cmd.add_argument('--hand-backend', choices=('mediapipe', 'wilor'), default='wilor',
                              help='hand recognizer (default: optimized WiLoR; MediaPipe remains optional)')
+            cmd.add_argument('--left-click', choices=('thumb-chord', 'thumb-tap'), default='thumb-chord',
+                             help='left-click method; thumb-tap is an experimental WiLoR tap on curled fingers')
             wilor_options(cmd)
             cmd.add_argument('--wilor-confidence', type=confidence, default=.50,
                              help='WiLoR detector threshold (default 0.50; try 0.45 for recall)')

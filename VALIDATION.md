@@ -744,3 +744,41 @@ B24: User reports index drift while extending the thumb for either click chord,
 mirrored with handedness. First freeze/chord and pinch proposals were rejected.
 A two-step target lock/confirmation alternative was proposed for discussion;
 click rules are unchanged pending the user's choice.
+
+
+## 18 — Thumb-tap left click experiment (B24)
+
+User requests a separate branch for the actual app and chooses left-click-only
+tapping against the three curled fingers; right click stays unchanged. Branch
+feat/thumb-tap-click builds on the B20–B23 fixes without merging them or this
+experiment into main. --left-click thumb-tap is opt-in; thumb-chord remains the
+default. WiLoR, CUDA/precision/confidence and calibration-free motion settings
+are unchanged. No new dependencies, weights or gesture training.
+
+The tap filter uses fused geometry, measures thumb-tip proximity to the distal
+chains of curled middle/ring/little fingers, and requires lift/near/release.
+Physical touch cannot be inferred reliably from these synthetic checks; this is
+an estimated proximity sequence. A complete cycle supplies a one-frame left
+click pulse on release, rather than reusing the old held left-chord dwell.
+Fist activation, owner pause/release, palm stop, scroll and chord latch gates are
+retained. The cursor is not frozen. Missing geometry, owner/view-contributor
+changes, stale/invalid time or a long contact cancel incomplete taps. New fusion
+view metadata is preserved in thumb diagnostics to support that cancellation.
+
+Full local suite: 177 tests run, 176 passed, one Windows ABI skip. Following final
+invalid-input guards, all 10 targeted tap tests pass, including two extra tests
+for invalid geometry/time and inactive/scroll suppression. Tests cover tap once,
+held contact/lift, one-frame spikes, loss/identity/source/time changes, rotations,
+reflections, scale, unchanged right/palm behavior and synthetic app integration.
+The desktop adapter receives one tap left click followed by the original right
+click with matching sounds; debug sends no desktop input and logs the distances
+and pulse in the normal data-only archive. pip check, compileall, CLI help and
+whitespace checks pass. The 960x540 desktop contact-state panel was rendered and
+visually inspected; the displayed GPU/FPS values in this synthetic preview are
+mocked, not a GPU benchmark. No real input events were sent.
+
+WiLoR has not been tested here with a physical natural thumb tap. At low FPS a
+short contact can fall between observations; curled-finger occlusion and landmark
+error can invent/hide proximity. Natural-speed recall, false taps and aim drift
+need the user's Windows trial before accepting or merging this experiment.
+See docs/thumb-tap.md for the command and initial thresholds.

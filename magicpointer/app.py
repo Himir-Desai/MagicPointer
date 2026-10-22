@@ -96,6 +96,7 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         combined, reason, _ = combine(hands, ignore_thumb=scrolling)
         if combined is None:
             return None, reason
+    tap = bool((combined.diagnostics or {}).get('thumb_tap', {}).get('click'))
     pitch = None
     shape, _ = measure(combined, allow_thumb=True)
     if shape is not None:
@@ -107,7 +108,7 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         if available is None:
             return None, 'No selected hand visible'
         points = available.pixels/mono_scale
-        return Observation(combined.gesture, (*points[0], 0.), (*points[8], 0.), pitch, index_only(combined)), 'Combined gesture; approximate image-space pointer'
+        return Observation(combined.gesture, (*points[0], 0.), (*points[8], 0.), pitch, index_only(combined), tap), 'Combined gesture; approximate image-space pointer'
     indices = [0]+list(range(5, 21)) if scrolling or combined.gesture == Gesture.SCROLL else list(range(21))
     points = stereo.reconstruct(left.pixels[indices], right.pixels[indices]) if left is not None and right is not None else None
     if points is not None and np.linalg.norm(points[0]) > 3.6576:
@@ -120,17 +121,20 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
         if available is None:
             return None, 'No selected hand visible'
         mapped, _ = approximate.map(available, view, reference)
-        return Observation(combined.gesture, tuple(mapped[0]), tuple(mapped[8]), pitch, index_only(combined)), 'APPROXIMATE single-camera pointer; no measured depth'
+        return Observation(combined.gesture, tuple(mapped[0]), tuple(mapped[8]), pitch, index_only(combined), tap), 'APPROXIMATE single-camera pointer; no measured depth'
     if approximate is not None:
         approximate.reset()
     indexed = dict(zip(indices, points))
     if shape is not None:
         pitch, _ = direction_pitch([indexed[i] for i in (5, 8, 9, 12)])
-    return Observation(combined.gesture, tuple(indexed[0]), tuple(indexed[8]), pitch, index_only(combined)), 'Combined gesture; calibrated stereo position'
+    return Observation(combined.gesture, tuple(indexed[0]), tuple(indexed[8]), pitch, index_only(combined), tap), 'Combined gesture; calibrated stereo position'
 
 
 def run(args):
     wilor = args.hand_backend == 'wilor'
+    tap_mode = args.left_click == 'thumb-tap'
+    if tap_mode and not wilor:
+        raise ValueError('Experimental thumb-tap requires --hand-backend wilor')
     two_cameras = args.right is not None
     if not args.uncalibrated and not two_cameras:
         raise ValueError("Calibrated stereo requires two cameras; omit --calibrated for one-camera control")
@@ -152,7 +156,11 @@ def run(args):
                     activation_dwell=2.5, retain_activation_on_loss=True, activation_grace=.4)
     if wilor:
         from .wilor_gestures import ThumbFilter
-    owner = HandOwner(2 if two_cameras else 1, gesture_filter=ThumbFilter() if wilor else None)
+    gesture_filter = ThumbFilter() if wilor else None
+    if tap_mode:
+        from .thumb_tap import ThumbTapFilter
+        gesture_filter = ThumbTapFilter()
+    owner = HandOwner(2 if two_cameras else 1, gesture_filter=gesture_filter)
     previous_key = None
     trackers, audio, desktop = [], None, None
     log = None
@@ -171,6 +179,7 @@ def run(args):
                            'requested_fps': args.fps, 'stereo': stereo is not None,
                            'hand_backend': args.hand_backend,
                            'classifier_profile': 'wilor-fixed-v1' if wilor else 'mediapipe',
+                           'left_click_method': args.left_click,
                            'preview_only': preview_only, 'calibration_issue': calibration_issue,
                            'gesture_recognition': 'available palm-aligned landmark fusion', 'fusion_version': 2,
                            'missing_view_policy': 'recognize available geometry; approximate relative pointer',
@@ -377,6 +386,13 @@ def run(args):
                 if wilor_tracker:
                     info = wilor_tracker.info
                     lines.append(f"WILOR | {info['device']} / {info['precision']} | threshold {args.wilor_confidence:.2f} | validated fresh hands")
+                if tap_mode:
+                    tap_info = ((selection.combined.diagnostics or {}).get('thumb_tap', {})
+                                if selection.combined else {})
+                    gap = tap_info.get('distance_palm_widths')
+                    gap_text = '--' if gap is None else f'{gap:.2f}'
+                    lines.append('LEFT TAP: ' + tap_info.get('state', 'no selected hand') +
+                                 f' | gap {gap_text} palm widths | RIGHT: thumb chord')
                 if engine.scrolling:
                     scroll = engine.scroll
                     feedback = "Hold two fingers steady: setting scroll neutral"

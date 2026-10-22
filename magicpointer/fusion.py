@@ -56,5 +56,6 @@ def combine(hands, *, ignore_thumb=False, bound_pair=False, diagnostics=None):
         return None, 'Views disagree on hand shape', spread
     world = np.mean(points, axis=0)
     profile = hands[0].profile
-    fused = Hand(hands[0].pixels, world, hands[0].label, classify(world, profile=profile), profile=profile)
+    fused = Hand(hands[0].pixels, world, hands[0].label, classify(world, profile=profile), profile=profile,
+                 diagnostics={'fusion_views': list(indices_used)})
     return fused, 'Combined landmark geometry' if len(hands) > 1 else 'Single-view hand geometry', spread

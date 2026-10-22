@@ -28,6 +28,7 @@ class Observation:
     tip: Point
     scroll_pitch: Optional[float] = None
     point_shape: bool = False
+    thumb_tap: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,6 +241,9 @@ class Engine:
             self._pointing_started = True
             self._last_move = now
             events.append(Event("move", self.cursor))
+        if gesture == Gesture.POINT and observation.thumb_tap and not self._action_latched:
+            self._action_latched = True
+            events.append(Event("click", "left"))
         if elapsed < self.dwell:
             return events
         if gesture in (Gesture.LEFT, Gesture.RIGHT) and not self._action_latched:
