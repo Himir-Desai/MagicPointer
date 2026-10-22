@@ -24,7 +24,7 @@ def fingerprint(path):
     return digest.hexdigest()
 
 
-def prediction(pixels, *, world=None, scores=None, label=None, box=None):
+def prediction(pixels, *, world=None, scores=None, label=None, box=None, detection_score=None):
     points = np.asarray(pixels, dtype=float)
     if points.shape != (21, 2) or not np.isfinite(points).all():
         raise ValueError('Model returned invalid 21-point image coordinates')
@@ -34,7 +34,7 @@ def prediction(pixels, *, world=None, scores=None, label=None, box=None):
             raise ValueError('Model returned invalid 3D hand coordinates')
     return {'pixels': points.tolist(), 'world': None if world is None else world.tolist(),
             'joint_scores': None if scores is None else np.asarray(scores).tolist(),
-            'label': label, 'box': box}
+            'label': label, 'box': box, 'detection_score': detection_score}
 
 
 class MediaPipeModel:
@@ -114,7 +114,7 @@ def wilor_predictions(outputs, limit):
 
 class WiLoRModel:
     """Runs only inside the separate optional PyTorch environment."""
-    def __init__(self, directory, device, limit):
+    def __init__(self, directory, device, limit, precision='fp32'):
         # Legacy MANO pickles reference chumpy, whose published release uses
         # aliases removed by NumPy 1.24 and Python 3.11. Confine compatibility
         # names to this isolated worker; the main app's modules stay untouched.
@@ -129,16 +129,20 @@ class WiLoRModel:
         from wilor_mini.pipelines.wilor_hand_pose3d_estimation_pipeline import WiLorHandPose3dEstimationPipeline
         if device == 'cuda' and not torch.cuda.is_available():
             raise ValueError('WiLoR requested CUDA but PyTorch cannot use it. Install the CUDA build in .venv-wilor.')
+        if precision == 'fp16' and device != 'cuda':
+            raise ValueError('WiLoR FP16 requires CUDA; use auto or fp32 for CPU checks')
+        self.precision = 'fp16' if precision == 'fp16' or (precision == 'auto' and device == 'cuda') else 'fp32'
+        self.dtype = torch.float16 if self.precision == 'fp16' else torch.float32
         self.torch, self.device, self.limit = torch, device, limit
         # Follow upstream's BGR tests and model.forward's internal BGR->RGB;
         # converting to RGB here would reverse colors twice.
         self.pipeline = WiLorHandPose3dEstimationPipeline(
-            device=torch.device(device), dtype=torch.float32, verbose=False,
+            device=torch.device(device), dtype=self.dtype, verbose=False,
             wilor_pretrained_dir=str(Path(directory).resolve()))
         self.pipeline.hand_detector.overrides['max_det'] = limit
         source = distribution('wilor-mini').read_text('direct_url.json')
         revision = json.loads(source).get('vcs_info', {}).get('commit_id') if source else None
-        self.info = {'implementation': 'WiLoR-mini / float32', 'device': device,
+        self.info = {'implementation': 'WiLoR-mini', 'device': device, 'precision': self.precision,
                      'wilor_mini': version('wilor-mini'), 'source_revision': revision,
                      'python': platform.python_version(),
                      'torch': torch.__version__, 'detection_threshold': .3,

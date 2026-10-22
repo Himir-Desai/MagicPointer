@@ -36,6 +36,20 @@ def pixels(value):
     return number
 
 
+def confidence(value):
+    number = float(value)
+    if not math.isfinite(number) or not 0 < number <= 1:
+        raise argparse.ArgumentTypeError('confidence must be greater than 0 and at most 1')
+    return number
+
+
+def wilor_options(cmd):
+    cmd.add_argument('--model-dir', type=Path, default=Path('models/comparison'))
+    cmd.add_argument('--wilor-python', type=Path, default=Path('.venv-wilor/Scripts/python.exe' if os.name == 'nt' else '.venv-wilor/bin/python'))
+    cmd.add_argument('--wilor-device', choices=('cpu', 'cuda'), default='cuda')
+    cmd.add_argument('--worker-timeout', type=positive, default=600., help='WiLoR startup/inference timeout in seconds')
+
+
 def capture_options(cmd):
     cmd.add_argument("--camera-backend", choices=("default", "msmf"), default="default",
                      help="default uses Media Foundation on Windows and the system backend elsewhere; msmf requires Windows")
@@ -64,6 +78,13 @@ def parser():
             cmd.add_argument("--mirror-x", action=argparse.BooleanOptionalAction, default=True)
             cmd.add_argument("--mute", action="store_true")
             cmd.add_argument("--max-hands", type=hand_limit, default=4, help="maximum hands detected per camera (1-8, default: 4)")
+            cmd.add_argument('--hand-backend', choices=('mediapipe', 'wilor'), default='mediapipe',
+                             help='WiLoR is an opt-in regular-debug experiment; requires --debug')
+            wilor_options(cmd)
+            cmd.add_argument('--wilor-confidence', type=confidence, default=.50,
+                             help='WiLoR debug detector threshold (default 0.50; try 0.45 for recall)')
+            cmd.add_argument('--wilor-precision', choices=('auto', 'fp16', 'fp32'), default='auto',
+                             help='WiLoR debug: auto uses FP16 on CUDA and FP32 on CPU')
         else:
             cmd.add_argument("--square-mm", type=positive, default=25., help="measured checkerboard square edge in mm")
             cmd.add_argument("--marker-size", type=positive, required=True, help="measured wall marker black square edge in metres")
@@ -106,12 +127,9 @@ def parser():
     cmd.add_argument('--models', nargs='+', choices=('mediapipe', 'rtmpose', 'wilor'),
                      default=['mediapipe', 'rtmpose', 'wilor'])
     cmd.add_argument('--model', type=Path, default=Path('models/hand_landmarker.task'))
-    cmd.add_argument('--model-dir', type=Path, default=Path('models/comparison'))
+    wilor_options(cmd)
     cmd.add_argument('--max-hands', type=hand_limit, default=4)
     cmd.add_argument('--output', type=Path, default=Path('diagnostics'))
-    cmd.add_argument('--wilor-python', type=Path, default=Path('.venv-wilor/Scripts/python.exe' if os.name == 'nt' else '.venv-wilor/bin/python'))
-    cmd.add_argument('--wilor-device', choices=('cpu', 'cuda'), default='cuda')
-    cmd.add_argument('--worker-timeout', type=positive, default=600., help='WiLoR startup/inference timeout in seconds')
     cmd.add_argument('--prepare', action='store_true', help='download selected models and check blank-frame inference without opening cameras')
     return root
 

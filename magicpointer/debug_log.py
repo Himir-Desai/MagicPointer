@@ -39,10 +39,15 @@ def hand_sample(hand):
         geometry = {'bounding_box_pixels': [min(point[0] for point in pixels), min(point[1] for point in pixels),
                                            max(point[0] for point in pixels), max(point[1] for point in pixels)],
                     'palm_size_pixels': math.hypot(pixels[0][0]-pixels[9][0], pixels[0][1]-pixels[9][1])}
+    metrics = (hand.diagnostics or {}).get('gesture_metrics')
+    if metrics is None:
+        metrics = gesture_metrics(hand.world, profile=hand.profile)
     return {'gesture_estimate': hand.gesture.value, 'handedness': hand.label,
             'handedness_score': hand.handedness_score, 'pixels': hand.pixels,
             'world_landmarks': hand.world, 'image_landmarks': hand.image_landmarks,
-            'metrics': gesture_metrics(hand.world), 'image_geometry': geometry}
+            'metrics': metrics,
+            'classifier_profile': hand.profile, 'detection_score': hand.detection_score,
+            'model_box': hand.model_box, 'model_diagnostics': hand.diagnostics, 'image_geometry': geometry}
 
 
 def runtime_info():
@@ -88,7 +93,7 @@ class DebugLog:
     def _write(self, name, value):
         (self.path/name).write_text(json.dumps(json_value(value), allow_nan=False, indent=2), encoding='utf-8')
 
-    def append(self, frames, hands, observation, engine, events, now, *, reason, paired, verified, state, detections=None, ownership=None, selection=None, timings=None, engine_before=None, position_source=None):
+    def append(self, frames, hands, observation, engine, events, now, *, reason, paired, verified, state, detections=None, ownership=None, selection=None, timings=None, engine_before=None, position_source=None, detector_diagnostics=None):
         sample = {'elapsed_seconds': now-self.started, 'monotonic_seconds': now,
                   'cameras': [{'grabbed_at': frame.grabbed_at,
                                'image_size': [frame.image.shape[1], frame.image.shape[0]],
@@ -97,6 +102,7 @@ class DebugLog:
                   'observation': asdict(observation) if observation else None,
                   'reason': reason, 'pair_timing_valid': paired, 'markers_verified': verified,
                   'position_source': position_source,
+                  'detector_diagnostics': detector_diagnostics,
                   'state': state, 'active': engine.active, 'scrolling': engine.scrolling,
                   'cursor': engine.cursor, 'origin': engine.origin,
                   'scroll': {'neutral_degrees': engine.scroll.neutral,

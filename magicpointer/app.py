@@ -53,7 +53,9 @@ def debug_views(frames, hands, indices, color, all_hands=None):
         for line, text in enumerate((label, pose)):
             cv2.putText(panel, text, (12+column*640, 747+line*25), cv2.FONT_HERSHEY_SIMPLEX, .57, color, 1, cv2.LINE_AA)
         if chosen:
-            metrics = gesture_metrics(chosen.world)
+            metrics = (chosen.diagnostics or {}).get('gesture_metrics')
+            if metrics is None:
+                metrics = gesture_metrics(chosen.world, profile=chosen.profile)
             if metrics['valid']:
                 cv2.putText(panel, f"Thumb/index/middle/ring/little: {metrics['signature']}",
                             (12+column*640, 797), cv2.FONT_HERSHEY_SIMPLEX, .48, color, 1, cv2.LINE_AA)
@@ -80,7 +82,7 @@ def large_gesture(panel, selection, owner, engine, color, ready=True, available=
 
 
 def index_only(hand):
-    metrics = gesture_metrics(hand.world)
+    metrics = gesture_metrics(hand.world, profile=hand.profile)
     return metrics['valid'] and [metrics['fingers'][name]['state'] for name in
                                  ('index', 'middle', 'ring', 'little')] == [1, 0, 0, 0]
 
@@ -128,6 +130,9 @@ def observe(left, right=None, *, stereo=None, scrolling=False, mono_scale=1., co
 
 
 def run(args):
+    wilor = args.hand_backend == 'wilor'
+    if wilor and not args.debug:
+        raise ValueError('WiLoR is a debug-only experiment; add --debug. Desktop control still uses MediaPipe.')
     if args.uncalibrated and not args.debug:
         raise ValueError("Uncalibrated testing requires --debug; desktop control requires stereo calibration")
     if not args.debug and args.right is None:
@@ -149,10 +154,13 @@ def run(args):
     engine = Engine(width=args.workspace_width * (10 if stereo is None else 1),
                     height=args.workspace_height * (10 if stereo is None else 1), mirror_x=args.mirror_x,
                     activation_dwell=2.5, retain_activation_on_loss=True, activation_grace=.4)
-    owner = HandOwner(2 if two_cameras else 1)
+    if wilor:
+        from .wilor_gestures import ThumbFilter
+    owner = HandOwner(2 if two_cameras else 1, gesture_filter=ThumbFilter() if wilor else None)
     previous_key = None
     trackers, audio, desktop = [], None, None
     log = None
+    wilor_tracker = None
     window = "MagicPointer - Q / Escape stops"
     mono_scale = 1.
     verified, verification_count = not two_cameras, 0
@@ -164,6 +172,8 @@ def run(args):
         if args.debug:
             log = DebugLog(args.output, {'camera_indices': [args.left] + ([args.right] if two_cameras else []),
                            'requested_fps': args.fps, 'stereo': stereo is not None,
+                           'hand_backend': args.hand_backend,
+                           'classifier_profile': 'wilor-fixed-v1' if wilor else 'mediapipe',
                            'preview_only': preview_only, 'calibration_issue': calibration_issue,
                            'gesture_recognition': 'available palm-aligned landmark fusion', 'fusion_version': 2,
                            'missing_view_policy': 'recognize available geometry; approximate relative pointer',
@@ -176,10 +186,18 @@ def run(args):
                            'activation_grace_seconds': engine.activation_grace,
                            'palm_release_policy': 'fused geometry held for 0.18s; no per-view gesture votes',
                            'termination': 'normal'})
+            if wilor:
+                log.metadata['model_sha256'] = None  # MediaPipe's task is not used by this backend.
         # Verify model/dependencies before opening camera devices.
-        trackers.append(Tracker(args.model, num_hands=args.max_hands))
-        if two_cameras:
+        if wilor:
+            from .wilor_debug import WiLoRDebug
+            wilor_tracker = WiLoRDebug(args, 2 if two_cameras else 1)
+            log.metadata['hand_model'] = wilor_tracker.info
+            print('WiLoR debug settings:', wilor_tracker.info)
+        else:
             trackers.append(Tracker(args.model, num_hands=args.max_hands))
+            if two_cameras:
+                trackers.append(Tracker(args.model, num_hands=args.max_hands))
         if not args.debug:
             from .desktop import Desktop
             desktop = Desktop()
@@ -226,10 +244,14 @@ def run(args):
                         raise ValueError(marker_message)
                     next_marker_check = now + 1.
                 detections = []
-                for index, (tracker, frame) in enumerate(zip(trackers, frames)):
-                    phase = time.perf_counter()
-                    detections.append(tracker.detect_all(frame.image, frame.grabbed_at))
-                    timings[f'detect_camera_{index}_ms'] = (time.perf_counter()-phase)*1000
+                if wilor_tracker:
+                    detections = wilor_tracker.detect(frames, owner, now)
+                    timings.update(wilor_tracker.timings)
+                else:
+                    for index, (tracker, frame) in enumerate(zip(trackers, frames)):
+                        phase = time.perf_counter()
+                        detections.append(tracker.detect_all(frame.image, frame.grabbed_at))
+                        timings[f'detect_camera_{index}_ms'] = (time.perf_counter()-phase)*1000
                 phase = time.perf_counter()
                 selection = owner.select(detections, frames, now, stereo=stereo, scrolling=engine.scrolling)
                 timings['selection_ms'] = (time.perf_counter()-phase)*1000
@@ -324,7 +346,8 @@ def run(args):
                     log.append(frames, hands, observation, engine, events, engine_now,
                                reason=reason, paired=paired, verified=verified, state=state,
                                detections=detections, ownership=owner, selection=selection,
-                               timings=timings, engine_before=engine_before, position_source=source)
+                               timings=timings, engine_before=engine_before, position_source=source,
+                               detector_diagnostics=wilor_tracker.diagnostics if wilor_tracker else None)
                     previous_log_ms = (time.perf_counter()-phase)*1000
                 phase = time.perf_counter()
                 color = COLORS[state]
@@ -341,6 +364,9 @@ def run(args):
                          (" (clicks ignored)" if engine.scrolling else ""),
                          reason if observation is None or source[0] == 'approximate' else (last_action if now < action_until else "Tracking"),
                          f"Processing: {measured_fps:.1f} FPS | Q / Esc / close window to stop"]
+                if wilor_tracker:
+                    info = wilor_tracker.info
+                    lines.append(f"WILOR DEBUG | {info['device']} / {info['precision']} | threshold {args.wilor_confidence:.2f} | validated fresh hands")
                 if engine.scrolling:
                     scroll = engine.scroll
                     feedback = "Hold two fingers steady: setting scroll neutral"
@@ -391,4 +417,6 @@ def run(args):
                 audio.close()
             for tracker in trackers:
                 tracker.close()
+            if wilor_tracker:
+                wilor_tracker.close()
             cv2.destroyAllWindows()

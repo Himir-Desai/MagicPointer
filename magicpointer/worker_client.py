@@ -7,14 +7,15 @@ import threading
 
 
 class WiLoRWorker:
-    def __init__(self, args, views):
+    def __init__(self, args, views, *, optimized=False):
         self.timeout = args.worker_timeout
         self.responses = queue.Queue()
-        self.process = subprocess.Popen(
-            [str(args.wilor_python), '-u', str(Path(__file__).with_name('model_worker.py')),
+        command = [str(args.wilor_python), '-u', str(Path(__file__).with_name('model_worker.py')),
              '--directory', str(Path(args.model_dir) / 'wilor'),
-             '--device', args.wilor_device, '--limit', str(args.max_hands)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+             '--device', args.wilor_device, '--limit', str(args.max_hands)]
+        if optimized:
+            command += ['--optimized', '--confidence', str(args.wilor_confidence), '--precision', args.wilor_precision]
+        self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         def read():
             try:
                 for line in self.process.stdout:
@@ -63,3 +64,14 @@ class WiLoRWorker:
             if stream and not stream.closed:
                 stream.close()
         self.reader.join(timeout=2)
+
+    def detect_batch(self, frames, owners):
+        import numpy as np
+        arrays = [np.ascontiguousarray(frame.image, dtype=np.uint8) for frame in frames]
+        request = {'frames': [{'shape': array.shape, 'timestamp': frame.grabbed_at}
+                              for frame, array in zip(frames, arrays)], 'owners': owners}
+        self.process.stdin.write(json.dumps(request).encode()+b'\n')
+        for array in arrays:
+            self.process.stdin.write(memoryview(array).cast('B'))
+        self.process.stdin.flush()
+        return self.receive()

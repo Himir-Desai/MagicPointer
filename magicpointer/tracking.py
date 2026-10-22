@@ -20,8 +20,11 @@ def angle(a, b, c):
     return math.degrees(math.acos(max(-1., min(1., sum(x*y for x, y in zip(ab, cb)) / denominator))))
 
 
-def gesture_metrics(points):
+def gesture_metrics(points, *, profile='mediapipe'):
     """Expose the exact current classifier measurements for labelled recordings."""
+    if profile == 'wilor-fixed-v1':
+        from .wilor_gestures import metrics
+        return metrics(points)
     if len(points) != 21 or not all(math.isfinite(v) for p in points for v in p):
         return {"valid": False, "reason": "invalid landmarks", "gesture": Gesture.UNKNOWN.value}
     palm = distance(points[0], points[9])
@@ -63,8 +66,8 @@ def gesture_metrics(points):
             "signature": list(signature), "gesture": gesture.value}
 
 
-def classify(points):
-    return Gesture(gesture_metrics(points)["gesture"])
+def classify(points, *, profile='mediapipe'):
+    return Gesture(gesture_metrics(points, profile=profile)["gesture"])
 
 
 @dataclass
@@ -75,6 +78,10 @@ class Hand:
     gesture: Gesture
     handedness_score: float = None
     image_landmarks: object = None
+    profile: str = 'mediapipe'
+    detection_score: float = None
+    model_box: object = None
+    diagnostics: object = None
 
 
 class Tracker:

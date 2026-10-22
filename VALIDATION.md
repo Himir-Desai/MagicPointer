@@ -608,3 +608,77 @@ Windows Python 3.11 installation, RTX 4060 CUDA execution, sustained two-camera
 performance, near/far landmark accuracy, identity recovery and the new approximate
 control policy still require the user's live trial. No replacement for MediaPipe
 is selected. See docs/model-comparison.md for setup, controls, caveats and sources.
+
+
+## 17: Optimized WiLoR in regular debug (B17/B18/B19)
+
+The user approves the recommended optimization/validation/fixed-geometry approach,
+chooses detector confidence around 0.45–0.50 and explicitly declines training.
+Added opt-in `run --debug --hand-backend wilor` on feat/wilor-debug. This uses the
+normal selection/virtual pointer/click/scroll/palm/log loop; a guard rejects WiLoR
+without --debug before initializing a model, camera or Desktop. MediaPipe remains
+the default; the comparison experiment keeps its original 0.30/FP32/legacy-rule
+baseline. Existing dependency environments/weights are reused.
+
+The optimized worker uses CUDA FP16 by default (auto selects FP32 on CPU), batches
+detector views, and collects all validated hand crops into one pose-model forward.
+Bound views reconstruct only the uniquely associated selected hand. The native
+BGR crop/padding/antialias/projection behavior is retained; mesh computation still
+happens internally, while only joints/camera parameters are copied back to CPU.
+One raw frame pair travels through the existing isolated worker in memory, with
+no image recording and no stale landmark fallback. Legacy comparison requests
+keep their original writable copy; the optimized path uses read-only raw views.
+
+Default confidence is 0.50; --wilor-confidence 0.45 is supported. New candidates
+need unique continuity and at least two fresh observations spanning 0.08 s;
+missing/repeated frames do not supply evidence. Selection uses the existing local
+IDs plus a conservative box gate; ambiguity pauses rather than replacing the
+owner. Nonfinite/degenerate geometry is rejected. These measures do not guarantee
+rejection of a persistent high-confidence object with plausible reconstructed
+joints, and raising the threshold can reduce recall of real distant hands.
+
+The WiLoR-only fixed thumb profile combines index-side palm extent, outward chain
+direction, thumb bend and 3D distance to finger chains. It uses stronger entry
+than exit thresholds and fresh thumb-opening confirmation. Literal projected
+intersection is neither required nor treated as physical contact. A straight
+thumb inside/across the palm remains tucked; ambiguous geometry stays unknown.
+No model is trained. Two associated views still contribute geometry to one
+classification; independent gesture labels are not votes. Open-thumb confirmation
+adds latency before the existing action dwell. Data-only logs retain model/profile,
+raw thumb metrics, filter state, scores, validation decisions and stage timings.
+
+Final batched local suite: **158 tests run; 157 passed, one Windows-only ABI skip**.
+Coverage includes six fixed poses through rotations/reflections/scales, a straight
+across-palm false-click mechanism, 3D contact versus projected overlap, segment
+distance edge cases, ambiguous/open/closed thumb transitions and stale/identity
+resets; 0.45/0.50 candidate filtering, temporal confirmation, selected-hand-only
+work and ambiguity; one-forward crop routing and left-hand coordinates; real
+binary two-frame worker transport; normal-debug activation, pointing, both clicks,
+palm release, one-view loss, error archive finalization and worker cleanup. Default
+MediaPipe/control/calibration/ownership/scroll regressions pass. After restoring
+the legacy writable input, targeted comparison (7) and WiLoR debug (6) tests also
+pass. Both environments pass pip check; CLI help, bytecode compilation with a
+writable cache and whitespace checks pass. No native OS input was sent.
+
+Actual-weight CPU validation (Python 3.9.6, PyTorch 2.5.0, upstream pinned demo
+image duplicated across views): the first unconfirmed pair performs no pose
+forward; the confirmed pair makes one forward with four crops, and bound owner
+contexts make one forward with two crops. A subsequent blank pair gives no old
+or replacement geometry; one-view inference also passes. Against the pinned
+wrapper's serial predict_with_bboxes path on the same selected crops, maximum
+pixel difference is 0.00008414 and native 3D difference is 1.49e-8. This checks
+implementation parity, not true joint accuracy. CUDA availability/device-name and
+pipeline creation were separately mocked to verify auto selects torch.float16
+and CPU FP16 is rejected; no actual GPU kernels were run here.
+
+An actual optimized subprocess completed a five-frame normal-debug session using
+mocked cameras and the upstream demo image. The real render/log/cleanup path
+passed, produced only session.json/samples.jsonl/summary.json in its ZIP, identified
+CPU/FP32/0.50/WiLoR hashes, included profile/stage/validation data and used no
+MediaPipe tracker or Desktop. The 1280x900 preview was rendered and visually
+inspected. This was not a physical camera, Windows CUDA or intended-pose trial.
+
+RTX 4060 FP16 numerical behavior, Windows sustained two-camera FPS, far-hand recall,
+false-hand reduction and natural pointing/left-click separation remain pending
+user testing. B17/B18/B19 remain open for live acceptance; there is no promised
+FPS or desktop promotion. Commands and limits are in docs/wilor-debug.md.

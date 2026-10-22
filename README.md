@@ -58,6 +58,22 @@ input. WiLoR has a separate CUDA environment for the RTX 4060. No filters or
 adaptive sensitivity retries are used. RTMPose offers 2D joints; MediaPipe/WiLoR
 also exercise the shared 3D geometry classifier.
 
+## Try optimized WiLoR in regular debug
+
+After the [WiLoR setup](docs/model-comparison.md), the opt-in regular debug backend
+supports the normal virtual pointer/click/scroll flow:
+
+```powershell
+.\.venv\Scripts\python.exe -m magicpointer run --debug --uncalibrated --hand-backend wilor --left 1 --right 2 --fps 30 --max-hands 2
+```
+
+It uses CUDA FP16 by default on a CUDA device, batches both views, validates fresh
+detections at confidence **0.50**, preserves the selected hand, and applies fixed
+palm-relative thumb geometry. Append `--wilor-confidence 0.45` for the lower
+threshold or `--wilor-precision fp32` for a precision reference. See the
+[WiLoR debug trial guide](docs/wilor-debug.md) for timings, confirmation latency
+and limitations. WiLoR is restricted to `--debug`; MediaPipe remains the default.
+
 ## Try one camera first
 
 ```sh

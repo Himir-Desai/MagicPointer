@@ -83,7 +83,7 @@ class Selection:
 
 
 class HandOwner:
-    def __init__(self, cameras, dwell=2.5):
+    def __init__(self, cameras, dwell=2.5, gesture_filter=None):
         self.locals = [LocalHands() for _ in range(cameras)]
         self.visible = [{} for _ in range(cameras)]
         self.owner = self.candidate = self.since = None
@@ -91,11 +91,14 @@ class HandOwner:
         self.palm_since = None
         self.release_ready = False
         self.diagnostics = {}
+        self.gesture_filter = gesture_filter
 
     def release(self):
         self.owner = self.candidate = self.since = None
         self.palm_since = None
         self.release_ready = False
+        if self.gesture_filter:
+            self.gesture_filter.reset()
 
     def lock(self, key):
         self.owner = key
@@ -104,6 +107,19 @@ class HandOwner:
         self.release_ready = False
 
     def select(self, detections, frames, now, *, stereo=None, scrolling=False):
+        selected = self._select(detections, frames, now, stereo=stereo, scrolling=scrolling)
+        if self.gesture_filter:
+            selected.combined = self.gesture_filter.update(selected.key, selected.combined, now)
+        if self.owner and selected.combined is not None and selected.combined.gesture == Gesture.PALM:
+            if self.palm_since is None:
+                self.palm_since = now
+            self.release_ready = now-self.palm_since >= .18
+            self.diagnostics['palm_release_evidence'] = 'fused_geometry_temporal_dwell'
+        else:
+            self.palm_since, self.release_ready = None, False
+        return selected
+
+    def _select(self, detections, frames, now, *, stereo=None, scrolling=False):
         detections = [[hand for hand in hands if canonical(hand) is not None
                        and np.asarray(hand.pixels).shape == (21, 2)
                        and np.isfinite(hand.pixels).all()] for hands in detections]
@@ -154,13 +170,6 @@ class HandOwner:
             selected = result(self.owner)
             if selected.combined is None:
                 selected.reason = 'OWNER PAUSED: '+selected.reason
-            if selected.combined is not None and selected.combined.gesture == Gesture.PALM:
-                if self.palm_since is None:
-                    self.palm_since = now
-                self.release_ready = now-self.palm_since >= .18
-                self.diagnostics['palm_release_evidence'] = 'fused_geometry_temporal_dwell'
-            else:
-                self.palm_since, self.release_ready = None, False
             return selected
         candidates = [result(key) for key in itertools.product(*(view.keys() or [None] for view in self.visible))]
         candidates = [item for item in candidates if item.combined is not None]
