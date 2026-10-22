@@ -706,3 +706,41 @@ pip check; compileall, CLI help and whitespace checks pass. The 960x540 desktop
 panel was rendered and visually inspected with synthetic inputs. No real cursor
 events were sent. Actual Windows SendInput and sustained desktop use require
 the user's live trial; no new GPU performance claim is made.
+
+
+## B20–B24 — Desktop interaction follow-up
+
+B20: A screen-space soft deadband (0.0025 normalized screen units) suppresses
+small oscillations. Smoothing time constants vary from 140 ms for precision
+to 55 ms for large motion. Tests verify vibration rejection, deliberate target
+acquisition, comparable behavior at 15/30/60 Hz, and filter reset on rebase.
+These are deterministic traces, not a comfort or tremor study.
+
+B21: The user clarifies background detection already works. The actual request
+is to release forgotten ownership after five seconds with no selected hand.
+Synthetic app sessions verify one timeout/deactivation, no early release, a new
+fist selecting a different identity, and cancellation when just one selected
+view returns before five seconds. Capture/processing failure and identity gates
+remain unchanged. No focus or low-FPS activation changes were retained.
+
+B22: After pointing has begun, an active fist parks the pointer. The first
+returning pointing pose rebases at the parked cursor; subsequent motion is
+relative to it. Tests verify no downward jump/recentering, no reactivation and
+continued movement. Initial activation retains its original fist origin.
+
+B23: Short mono PCM WAVs distinguish left/right clicks and both existing chimes.
+Tests verify valid distinct waveforms, sub-100-ms click cues, mute suppression
+and exactly one corresponding cue for emitted simulated/native-adapter clicks.
+Playback stays on the existing queue thread. Actual speakers were not used.
+
+Final validation covers 169 tests: 168 pass and one Windows ABI check skips.
+The full run initially failed the new timeout test because it used the wrong
+archive timestamp key, then because it omitted the existing exit chime from its
+expected sequence. Corrected timeout tests both pass; all other full-suite tests
+passed. pip check, compileall and git diff --check pass. No real cursor events
+were sent. Windows live feel/audio/timeout acceptance remains pending.
+
+B24: User reports index drift while extending the thumb for either click chord,
+mirrored with handedness. First freeze/chord and pinch proposals were rejected.
+A two-step target lock/confirmation alternative was proposed for discussion;
+click rules are unchanged pending the user's choice.

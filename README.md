@@ -288,8 +288,9 @@ cannot reveal a moved rig, so keep them visible when possible.
 **Q, Escape, Ctrl+C, or closing the window stops the application.** An open palm
 also deactivates pointer control while keeping the application running. Camera
 failures end the app with a readable error. Losing all selected views, an ambiguous
-identity, invalid pair timing or a processing stall pauses input while retaining
-the selected owner and activation. A single visible selected view continues
+identity, invalid pair timing or a processing stall pauses input. Ownership and
+activation are retained for brief gaps. Five seconds with no selected hand in
+either view deactivates and releases it, so a new fist can select a hand. A single visible selected view continues
 gesture recognition and approximate movement. Input resumes with the same hand, with
 pending click/scroll state cleared and pointer position rebased.
 
@@ -303,6 +304,16 @@ pending click/scroll state cleared and pointer position rebased.
 | Index + middle toward screen | Enter wrist scrolling; hold steady to capture neutral automatically, then tilt up/down |
 | Index + thumb + middle outside scrolling | One right click after 0.18 s of stable recognition |
 | Selected hand fully open | Stop motion immediately; shared palm geometry held 0.18 s releases control; deactivation chime |
+
+Pointer motion uses a small screen-space jitter deadband and stronger smoothing
+near a target, easing damping for larger movements. Once you have started
+pointing, close your fist to park the cursor, reposition your hand, then point
+again: the cursor stays where it was and motion continues from the new pose.
+You remain selected/active; no activation chime or recentering is needed.
+
+Successful left and right clicks play different short sounds. `--mute` disables
+these along with activation/deactivation sounds. Sounds follow emitted clicks,
+not every detected click pose; held gestures do not repeatedly play a sound.
 
 Open the fingers for a click chord together: holding thumb-only long enough is a
 left click, even if you later add the middle finger. After a click, return to
