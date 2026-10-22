@@ -28,6 +28,17 @@ Run these from the repository root, using the existing app environment:
 .venv\Scripts\python.exe -m magicpointer compare-models --prepare --max-hands 2
 ```
 
+The browser page is https://github.com/warmshao/WiLoR-mini. The
+`git+...git@<commit>` argument above is pip syntax, not a browser page URL. If
+that Git-based install fails, install the same pinned source archive instead:
+
+```powershell
+.\.venv-wilor\Scripts\python.exe -m pip install --no-deps "https://github.com/warmshao/WiLoR-mini/archive/ebec42f94c389070cdd7dda6fd1bf0b4a659c960.zip"
+```
+
+This alternative does not require Git for installing WiLoR. If it also fails,
+retain the complete pip error output so the access/build failure can be diagnosed.
+
 The last command downloads/checks selected weights and performs blank-frame
 inference without opening cameras. WiLoR's first run downloads several GB of
 assets under `models/comparison/wilor`; allow it to finish. Increase
