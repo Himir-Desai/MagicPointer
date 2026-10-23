@@ -24,4 +24,6 @@ Recording a bug does not authorize fixing it. Keep resolved entries for history.
 
 | B16 | Periodic wall-marker checks run on the processing loop, stalling it up to ~250 ms per check on noisy frames, and a single displaced-marker reading ends the session. | 2, 4 | Yes (synthetic validation); live confirmation pending | B16: Checks run on a background thread and stop control only after three consecutive failures. Found during the feature 14 audit. See reports/14-experience-audit.md. |
 
-Next bug number: **B17**.
+| B17 | The app does not recognize that the selected hand is gone: ownership is kept indefinitely, so a hand that leaves and returns elsewhere (or is lost in one view and reappears as a new track) leaves input stuck in OWNER PAUSED until restart. | 4, 12 | Yes (synthetic validation); live confirmation pending | B17: User reported the owner is not recognized as gone and requested an owner timeout. An owner without a usable matched pose for `--owner-timeout` seconds (default 5; 0 disables) is released with the deactivation chime; any hand then needs a new fist hold. The paused banner counts down. Short pauses still resume the same owner. |
+
+Next bug number: **B18**.

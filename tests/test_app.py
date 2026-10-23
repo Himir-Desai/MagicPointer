@@ -100,6 +100,19 @@ class AppTests(unittest.TestCase):
         camera.__exit__.assert_called_once()
         audio.close.assert_called_once()
 
+    def test_owner_that_stays_away_is_released_and_a_new_fist_selects_again(self):
+        poses = [Gesture.FIST]*70 + [None]*40 + [Gesture.FIST]*70
+        chimes = {}
+        for timeout in ('0.5', '0'):
+            with patch('builtins.print'):
+                result, *_, audio = debug_session(poses, argv=('run', '--debug', '--mute', '--owner-timeout', timeout))
+            self.assertEqual(result, 0)
+            chimes[timeout] = [call.args for call in audio.play.call_args_list]
+        # Timeout: release chime, then a fresh fist hold selects and activates again; exit chime last.
+        self.assertEqual(chimes['0.5'], [(True,), (False,), (True,), (False,)])
+        # No timeout: the returning hand resumes silently as the same owner.
+        self.assertEqual(chimes['0'], [(True,), (False,)])
+
     def test_capture_failure_cleans_up_tracker_audio_and_camera(self):
         args = parser().parse_args(['run', '--debug'])
         camera, tracker, audio = MagicMock(), MagicMock(), MagicMock()

@@ -630,3 +630,15 @@ at 4, 5 and 6 mm produced no false clicks. A half-raised ring finger is
 unrecognized on a fresh hand and keeps an established right click. Local
 regression run (Python 3.11): 170 tests, 169 passed, 1 Windows-only check
 skipped. Live comfort and detection of the little finger at distance are pending.
+
+## B17 Owner timeout
+
+A selected owner with no usable matched pose for `--owner-timeout` seconds
+(default 5) is released. Unit checks: the owner is kept at 4.9 s missing and
+released at 5.1 s, while another visible fist only becomes a new candidate at
+zero progress; returning before the timeout restarts it; `0` keeps the owner
+through 60 s missing. End-to-end debug loop: with a 0.5 s timeout, fist,
+absence and a second fist give activation, release, reactivation and exit
+chimes; with `0` the returning hand resumes silently as the same owner. Local
+regression run (Python 3.11): 173 tests, 172 passed, 1 Windows-only check
+skipped. Live behaviour with real hand exits and re-entries is pending.

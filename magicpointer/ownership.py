@@ -84,11 +84,15 @@ class Selection:
 
 
 class HandOwner:
-    def __init__(self, cameras, dwell=2.5):
+    def __init__(self, cameras, dwell=2.5, timeout=5.):
         self.locals = [LocalHands() for _ in range(cameras)]
         self.visible = [{} for _ in range(cameras)]
         self.owner = self.candidate = self.since = None
         self.dwell = dwell
+        # Release an owner that stays missing or unusable this long; 0 never releases.
+        self.timeout = timeout
+        self.lost_since = None
+        self.expired = False
         self.palm_since = None
         self.release_ready = False
         self.diagnostics = {}
@@ -96,12 +100,14 @@ class HandOwner:
 
     def release(self):
         self.owner = self.candidate = self.since = None
+        self.lost_since = None
         self.palm_since = None
         self.release_ready = False
 
     def lock(self, key):
         self.owner = key
         self.candidate = self.since = None
+        self.lost_since = None
         self.palm_since = None
         self.release_ready = False
 
@@ -110,6 +116,7 @@ class HandOwner:
                                       self.owner[index] if self.owner else None)
                         for index, (tracker, hands, frame) in enumerate(zip(self.locals, detections, frames))]
         self.diagnostics = {'timestamp': now, 'pairs': [], 'ambiguous_pair_margins': []}
+        self.expired = False
         self.stabilizers = {key: value for key, value in self.stabilizers.items() if value.time is not None and now-value.time <= 1.}
         def result(key):
             hands = [view.get(track) for view, track in zip(self.visible, key)]
@@ -130,7 +137,21 @@ class HandOwner:
         if self.owner:
             selected = result(self.owner)
             if selected.combined is None:
-                selected.reason = 'OWNER PAUSED: '+selected.reason
+                if self.lost_since is None:
+                    self.lost_since = now
+                lost = now-self.lost_since
+                self.diagnostics['owner_lost_seconds'] = lost
+                if self.timeout and lost >= self.timeout:
+                    # The selected hand is gone; any hand can now be selected with a new fist hold.
+                    self.release()
+                    self.expired = True
+                    self.diagnostics['owner_released'] = 'timeout'
+                else:
+                    release = f' (releases in {self.timeout-lost:.1f}s)' if self.timeout else ''
+                    selected.reason = 'OWNER PAUSED'+release+': '+selected.reason
+            else:
+                self.lost_since = None
+        if self.owner:
             if selected.combined is not None and selected.combined.gesture == Gesture.PALM:
                 if self.palm_since is None:
                     self.palm_since = now

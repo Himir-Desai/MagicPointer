@@ -14,6 +14,13 @@ def positive(value):
     return number
 
 
+def nonnegative(value):
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError("must be a nonnegative finite number")
+    return number
+
+
 def camera(value):
     number = int(value)
     if number < 0:
@@ -66,6 +73,8 @@ def parser():
             cmd.add_argument("--max-hands", type=hand_limit, default=4, help="maximum hands detected per camera (1-8, default: 4)")
             cmd.add_argument("--activation-seconds", type=positive, default=2.5,
                              help="fist hold that selects and activates a hand (default: 2.5)")
+            cmd.add_argument("--owner-timeout", type=nonnegative, default=5.,
+                             help="release the selected hand after it is missing or unusable this many seconds; 0 keeps it until its palm opens (default: 5)")
             cmd.add_argument("--crop-recovery", action=argparse.BooleanOptionalAction, default=True,
                              help="re-detect a recently lost hand in a magnified crop around its last position")
             cmd.add_argument("--smooth-scroll", action=argparse.BooleanOptionalAction, default=True,

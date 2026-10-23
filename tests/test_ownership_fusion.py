@@ -112,6 +112,42 @@ class OwnershipTests(unittest.TestCase):
         self.assertEqual(selected.key, key)
         self.assertIsNotNone(selected.combined)
 
+    def test_missing_owner_is_released_after_the_timeout_without_takeover(self):
+        selected = self.step([pose()], [pose(x=600.)])
+        self.owner.lock(selected.key)
+        key = selected.key
+        stranger = [pose(x=1200., label='Left')], [pose(x=1300., label='Left')]
+        selected = self.step(*stranger)
+        self.assertIn('releases in 5.0s', selected.reason)
+        self.step(*stranger, dt=4.9)
+        self.assertEqual(self.owner.owner, key)
+        self.assertFalse(self.owner.expired)
+        selected = self.step(*stranger, dt=.2)
+        self.assertTrue(self.owner.expired)
+        self.assertIsNone(self.owner.owner)
+        # The other hand's fist only becomes a candidate; it must still be held to select it.
+        self.assertEqual(selected.combined.gesture, Gesture.FIST)
+        self.assertNotEqual(selected.key, key)
+        self.assertEqual(selected.progress, 0.)
+        self.step(*stranger)
+        self.assertFalse(self.owner.expired)
+
+    def test_owner_return_restarts_the_timeout_and_zero_disables_it(self):
+        selected = self.step([pose()], [pose(x=600.)])
+        self.owner.lock(selected.key)
+        key = selected.key
+        for _ in range(2):
+            self.step([], [])
+            self.step([], [], dt=4.)
+            selected = self.step([pose()], [pose(x=600.)])
+            self.assertEqual(selected.key, key)
+            self.assertIsNotNone(selected.combined)
+        self.owner.timeout = 0.
+        self.step([], [])
+        selected = self.step([], [], dt=60.)
+        self.assertEqual(self.owner.owner, key)
+        self.assertNotIn('releases', selected.reason)
+
     def test_owner_pose_keeps_last_state_through_an_uncertain_thumb_frame(self):
         from test_tracking import thumb_at
         def left_click(ip):

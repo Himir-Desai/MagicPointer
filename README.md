@@ -104,8 +104,11 @@ local hand IDs; ambiguous crossings or missing selected views pause input instea
 of selecting a different hand. Tracking loss retains ownership, although input
 pauses immediately without discarding activation: return the same hand near its
 last tracked position to resume. Recovery does not fire a held click chord; point
-or make a fist before clicking again. Scrolling captures a fresh neutral. If tracking cannot be recovered, Q/Escape and
-restart lets you select afresh. This is visual tracking, not biometric identity.
+or make a fist before clicking again. Scrolling captures a fresh neutral. If the
+selected hand stays missing or unusable for 5 seconds, it is released with the
+deactivation chime and any hand can be selected again with a new fist hold; the
+banner counts down while paused. `--owner-timeout SECONDS` changes the delay and
+`--owner-timeout 0` keeps the hand until its palm opens. This is visual tracking, not biometric identity.
 
 ## Try two cameras
 
@@ -294,7 +297,8 @@ cannot reveal a moved rig, so keep them visible when possible.
 also deactivates pointer control while keeping the application running. If a
 camera stops delivering frames, it is reopened in the background; only a stream
 that stays down for 5 seconds ends the app with a readable error. Missing/rejected views or a processing
-stall pause input while retaining the selected owner and activation. Gaps of up to
+stall pause input while retaining the selected owner and activation, for up to
+`--owner-timeout` seconds (default 5) when the owner itself is missing. Gaps of up to
 0.10 s are bridged without pausing; bridged frames never count toward a gesture
 hold or trigger an action. There is no one-camera fallback. Input resumes with the same confidently matched hand, with
 pending click/scroll state cleared and pointer position rebased.

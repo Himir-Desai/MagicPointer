@@ -74,6 +74,9 @@ def large_gesture(panel, selection, owner, engine, color, ready=True, available=
             status = 'INPUT PAUSED - CHECK BOTH VIEWS'
         if selection.combined is None:
             status = 'INPUT PAUSED - RETURN THE SELECTED HAND'
+            lost = owner.diagnostics.get('owner_lost_seconds')
+            if owner.timeout and lost is not None:
+                status = f'RETURN THE SELECTED HAND - RELEASING IN {max(0., owner.timeout-lost):.1f}S'
     else:
         status = selection.reason.upper()
     for text, baseline, scale in ((label, 83, 2.6), (status, 147, 1.5)):
@@ -193,7 +196,7 @@ def run(args):
     engine = Engine(width=args.workspace_width * (10 if stereo is None else 1),
                     height=args.workspace_height * (10 if stereo is None else 1), mirror_x=args.mirror_x,
                     activation_dwell=args.activation_seconds, retain_activation_on_loss=True, activation_grace=.4)
-    owner = HandOwner(2 if two_cameras else 1, dwell=args.activation_seconds)
+    owner = HandOwner(2 if two_cameras else 1, dwell=args.activation_seconds, timeout=args.owner_timeout)
     previous_key = None
     trackers, audio, desktop = [], None, None
     log, adaptive, pool, watch, recovery = None, None, None, None, None
@@ -215,6 +218,7 @@ def run(args):
                            'loss_timeout_seconds': engine.loss_timeout, 'retain_activation_on_loss': True,
                            'activation_grace_seconds': engine.activation_grace,
                            'palm_release_policy': 'immediate two-view and fused agreement, otherwise 0.18s',
+                           'owner_timeout_seconds': owner.timeout,
                            'pipeline': {'capture': 'background newest-frame threads', 'parallel_detection': two_cameras,
                                         'crop_recovery': args.crop_recovery, 'marker_checks': 'background, 3 consecutive failures stop'},
                            'termination': 'normal'})
@@ -260,7 +264,8 @@ def run(args):
             print("Camera negotiated settings:", cameras.info)
             print("DEBUG: preview only; no OS pointer input" if args.debug else
                   ("STEREO CONTROL" if stereo else "DESKTOP CONTROL") + ": Q/Escape or close window to stop")
-            print(f"Show one fist for {args.activation_seconds:g} seconds to select that hand; open its palm to release. Other hands are ignored.")
+            release = f", or keep it away for {owner.timeout:g} seconds," if owner.timeout else ""
+            print(f"Show one fist for {args.activation_seconds:g} seconds to select that hand; open its palm{release} to release. Other hands are ignored.")
             print("Two fingers toward screen: hold steady to set scroll neutral; tilt up/down. Index-only exits scrolling.")
             start, count, measured_fps = time.monotonic(), 0, 0.
             last_action, action_until = "", 0.
@@ -342,7 +347,9 @@ def run(args):
                     previous_key = selection.key
                 engine_before = engine.diagnostics(engine_now)
                 phase = time.perf_counter()
-                events = engine.step(observation, engine_now)
+                # A timed-out owner ends control before another hand's frame can resume it.
+                events = engine.stop('owner timeout') if owner.expired and engine.active else []
+                events += engine.step(observation, engine_now)
                 timings['engine_ms'] = (time.perf_counter()-phase)*1000
                 if not engine.active and engine.activation_progress > 0:
                     selection.progress = engine.activation_progress
